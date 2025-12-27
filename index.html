@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Text-Formatter + Keyword Highlight</title>
+  <style>
+    :root {
+      --bg: #0b0f17;
+      --panel: #121a2a;
+      --border: rgba(255,255,255,.08);
+      --text: rgba(255,255,255,.92);
+      --muted: rgba(255,255,255,.68);
+      --accent: rgba(255, 227, 94, .28);
+      --accentBorder: rgba(255, 227, 94, .55);
+      --shadow: 0 10px 30px rgba(0,0,0,.35);
+      --radius: 18px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: var(--sans);
+      background: radial-gradient(1000px 700px at 20% 10%, #1a2440 0%, transparent 55%),
+                  radial-gradient(900px 600px at 80% 20%, #2b1a40 0%, transparent 55%),
+                  var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 24px;
+    }
+
+    .wrap {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: grid;
+      gap: 18px;
+    }
+
+    header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 20px;
+      letter-spacing: .2px;
+    }
+
+    .sub {
+      margin: 6px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .card {
+      background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.02));
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .cardHead {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+      gap: 12px;
+    }
+
+    .cardHead strong {
+      font-size: 13px;
+      letter-spacing: .2px;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1.1fr .9fr;
+      gap: 18px;
+    }
+
+    @media (max-width: 900px) {
+      .row { grid-template-columns: 1fr; }
+    }
+
+    textarea, input[type="text"] {
+      width: 100%;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: rgba(0,0,0,.22);
+      color: var(--text);
+      padding: 12px 12px;
+      outline: none;
+      font-size: 14px;
+    }
+
+    textarea {
+      min-height: 260px;
+      resize: vertical;
+      line-height: 1.45;
+    }
+
+    textarea:focus, input[type="text"]:focus {
+      border-color: rgba(255,255,255,.18);
+    }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      user-select: none;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: rgba(0,0,0,.18);
+    }
+
+    .toggle input { transform: translateY(1px); }
+
+    .btn {
+      cursor: pointer;
+      border: 1px solid var(--border);
+      background: rgba(0,0,0,.18);
+      color: var(--text);
+      padding: 8px 10px;
+      border-radius: 999px;
+      font-size: 13px;
+    }
+
+    .btn:hover { border-color: rgba(255,255,255,.18); }
+
+    .hint {
+      color: var(--muted);
+      font-size: 12px;
+      padding: 0 16px 14px;
+      line-height: 1.35;
+    }
+
+    .content {
+      padding: 16px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .outBox {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: rgba(0,0,0,.20);
+      padding: 14px 14px;
+      white-space: pre-wrap; /* Zeilenumbrüche behalten */
+      line-height: 1.55;
+      font-size: 14px;
+      min-height: 260px;
+      overflow: auto;
+    }
+
+    mark.hl {
+      background: var(--accent);
+      border: 1px solid var(--accentBorder);
+      color: var(--text);
+      padding: 0 2px;
+      border-radius: 6px;
+      box-decoration-break: clone;
+      -webkit-box-decoration-break: clone;
+    }
+
+    .stats {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--muted);
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .pill {
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: rgba(0,0,0,.14);
+    }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <h1>Text-Formatter + Keyword Highlight</h1>
+        <p class="sub">
+          Füge Text ein, optional HTML entfernen, dann Keywords markieren (kommagetrennt oder in Anführungszeichen).
+          Alles aktualisiert sich live.
+        </p>
+      </div>
+    </header>
+
+    <div class="row">
+      <!-- INPUT -->
+      <section class="card">
+        <div class="cardHead">
+          <strong>Eingabe</strong>
+          <div class="controls">
+            <label class="toggle" title="Entfernt HTML-Tags (z.B. <b>, <div>), dekodiert Entities und normalisiert Leerzeichen.">
+              <input id="stripHtml" type="checkbox" />
+              HTML-Tags entfernen
+            </label>
+            <button class="btn" id="clearBtn" type="button">Leeren</button>
+            <button class="btn" id="sampleBtn" type="button">Beispiel</button>
+          </div>
+        </div>
+
+        <div class="content">
+          <textarea id="inputText" placeholder="Hier Text einfügen... (kann auch HTML enthalten)"></textarea>
+
+          <div>
+            <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+              <strong style="font-size:13px;">Keywords</strong>
+              <span style="color: rgba(255,255,255,.55); font-size:12px;">
+                z.B.: <span style="font-family:var(--mono);">"black hole", LOFAR, 1420 MHz</span>
+              </span>
+            </div>
+            <input id="keywords" type="text" placeholder='Keywords (kommagetrennt oder "als Phrase")' />
+          </div>
+
+          <div class="stats" aria-live="polite">
+            <span class="pill" id="wordCount">Wörter: 0</span>
+            <span class="pill" id="kwCount">Keywords: 0</span>
+            <span class="pill" id="hitCount">Treffer: 0</span>
+          </div>
+        </div>
+
+        <div class="hint">
+          Tipp: Phrasen in <span style="font-family:var(--mono);">"Anführungszeichen"</span> bleiben als ein Keyword.
+          Sonderzeichen werden automatisch sicher behandelt (keine Regex-Probleme).
+        </div>
+      </section>
+
+      <!-- OUTPUT -->
+      <section class="card">
+        <div class="cardHead">
+          <strong>Ausgabe (neuformatiert + Highlight)</strong>
+          <div class="controls">
+            <button class="btn" id="copyBtn" type="button">Text kopieren</button>
+          </div>
+        </div>
+        <div class="content">
+          <div id="output" class="outBox" role="region" aria-label="Ausgabetext"></div>
+        </div>
+        <div class="hint">
+          Output ist reiner Text (bzw. Markup nur fürs Highlight). Wenn „HTML-Tags entfernen“ aktiv ist,
+          wird aus HTML sauberer Text.
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    const elInput = document.getElementById('inputText');
+    const elStrip = document.getElementById('stripHtml');
+    const elKeywords = document.getElementById('keywords');
+    const elOutput = document.getElementById('output');
+
+    const wordCount = document.getElementById('wordCount');
+    const kwCount = document.getElementById('kwCount');
+    const hitCount = document.getElementById('hitCount');
+
+    document.getElementById('clearBtn').addEventListener('click', () => {
+      elInput.value = '';
+      elKeywords.value = '';
+      elStrip.checked = false;
+      render();
+    });
+
+    document.getElementById('sampleBtn').addEventListener('click', () => {
+      elInput.value =
+`<div>
+  <h2>LOFAR &amp; Radio Astronomy</h2>
+  <p>The 21 cm hydrogen line is at <b>1420 MHz</b>. Black hole mergers are fascinating.</p>
+  <p>Try searching for keywords like "black hole", LOFAR, 1420 MHz.</p>
+</div>`;
+      elKeywords.value = '"black hole", LOFAR, 1420 MHz';
+      elStrip.checked = true;
+      render();
+    });
+
+    document.getElementById('copyBtn').addEventListener('click', async () => {
+      const text = getFormattedText();
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch {
+        // Fallback
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+    });
+
+    elInput.addEventListener('input', render);
+    elStrip.addEventListener('change', render);
+    elKeywords.addEventListener('input', render);
+
+    function decodeHtmlEntities(html) {
+      // Sicheres Dekodieren von &amp; etc.
+      const txt = document.createElement('textarea');
+      txt.innerHTML = html;
+      return txt.value;
+    }
+
+    function stripHtmlToText(html) {
+      // HTML -> sichtbarer Text (inkl. sinnvollem Whitespace)
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, 'text/html');
+      const text = doc.body.innerText ?? doc.body.textContent ?? '';
+      return normalizeText(text);
+    }
+
+    function normalizeText(text) {
+      // Normalisiert Whitespace, aber behält Absätze
+      // 1) Windows Zeilenenden -> \n
+      let t = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+      // 2) Tabs -> Space
+      t = t.replace(/\t/g, ' ');
+      // 3) Mehrere Spaces in einer Zeile reduzieren (aber neue Zeilen behalten)
+      t = t.split('\n').map(line => line.replace(/ {2,}/g, ' ').trimEnd()).join('\n');
+      // 4) Mehrere Leerzeilen leicht normalisieren
+      t = t.replace(/\n{3,}/g, '\n\n');
+      return t.trim();
+    }
+
+    function getFormattedText() {
+      const raw = elInput.value ?? '';
+      if (!raw.trim()) return '';
+      if (!elStrip.checked) {
+        // Optional auch Entities dekodieren, falls jemand Text mit &amp; einfügt
+        return normalizeText(decodeHtmlEntities(raw));
+      }
+      return stripHtmlToText(raw);
+    }
+
+    function parseKeywords(input) {
+      // Unterstützt: kommagetrennt, und Phrasen in "..."
+      // Beispiel: '"black hole", LOFAR, 1420 MHz'
+      const s = (input || '').trim();
+      if (!s) return [];
+
+      const out = [];
+      const re = /"([^"]+)"|([^,]+)/g;
+      let m;
+      while ((m = re.exec(s)) !== null) {
+        const kw = (m[1] ?? m[2] ?? '').trim();
+        if (kw) out.push(kw);
+      }
+
+      // Duplikate entfernen (case-insensitive), aber Original-Case behalten (erstes Vorkommen)
+      const seen = new Set();
+      const unique = [];
+      for (const k of out) {
+        const key = k.toLowerCase();
+        if (!seen.has(key)) {
+          seen.add(key);
+          unique.push(k);
+        }
+      }
+      return unique;
+    }
+
+    function escapeHtml(str) {
+      return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function escapeRegExp(str) {
+      // Keywords können Sonderzeichen enthalten, die Regex kaputt machen würden
+      return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    function highlight(text, keywords) {
+      if (!text) return { html: '', hits: 0 };
+      if (!keywords.length) return { html: escapeHtml(text), hits: 0 };
+
+      // Längere Keywords zuerst, damit z.B. "black hole" vor "black" matched
+      const sorted = [...keywords].sort((a, b) => b.length - a.length);
+
+      const pattern = sorted.map(k => escapeRegExp(k)).join('|');
+      if (!pattern) return { html: escapeHtml(text), hits: 0 };
+
+      const re = new RegExp(pattern, 'gi');
+
+      let hits = 0;
+      const html = escapeHtml(text).replace(re, (match) => {
+        hits++;
+        return `<mark class="hl">${escapeHtml(match)}</mark>`;
+      });
+
+      return { html, hits };
+    }
+
+    function countWords(text) {
+      if (!text) return 0;
+      // Simple word count across lines
+      const tokens = text.trim().split(/\s+/).filter(Boolean);
+      return tokens.length;
+    }
+
+    function render() {
+      const formatted = getFormattedText();
+      const kws = parseKeywords(elKeywords.value);
+
+      const { html, hits } = highlight(formatted, kws);
+      elOutput.innerHTML = html || '';
+
+      wordCount.textContent = `Wörter: ${countWords(formatted)}`;
+      kwCount.textContent = `Keywords: ${kws.length}`;
+      hitCount.textContent = `Treffer: ${hits}`;
+    }
+
+    // Initial
+    render();
+  </script>
+</body>
+</html>
