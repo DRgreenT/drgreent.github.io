@@ -159,9 +159,9 @@
       const { html, hits } = highlight(formatted, kws);
       elOutput.innerHTML = html || '';
 
-      wordCount.textContent = `Wörter: ${countWords(formatted)}`;
+      wordCount.textContent = `Words: ${countWords(formatted)}`;
       kwCount.textContent = `Keywords: ${kws.length}`;
-      hitCount.textContent = `Treffer: ${hits}`;
+      hitCount.textContent = `Hits: ${hits}`;
     }
 
     // Initial
