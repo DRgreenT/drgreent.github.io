@@ -5,8 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Agent Toolkit</title>
   <link rel="stylesheet" href="./css/styles.css">
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./js/app.js" defer></script>
 </head>
 
 <body>
@@ -15,12 +13,16 @@
       <div class="brand">Agent Toolkit</div>
 
       <nav class="nav">
-        <button class="navItem" data-view="highlightit">HighlightIt</button>
+        <button class="navItem active" data-view="highlightit">HighlightIt</button>
         <button class="navItem" data-view="numbers">Numbers</button>
       </nav>
 
       <div class="small">
-        Stored locally in your browser.
+        Numbers are cloud-based. Editing is available in the Admin page (admins only).
+      </div>
+
+      <div class="small" style="margin-top:10px;">
+        <a href="./admin.html">Admin Editor</a>
       </div>
     </aside>
 
@@ -28,5 +30,7 @@
       <div id="viewRoot"></div>
     </main>
   </div>
+
+  <script type="module" src="./js/app.js"></script>
 </body>
 </html>

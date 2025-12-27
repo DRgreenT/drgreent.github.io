@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Agent Toolkit – Admin Editor</title>
+  <link rel="stylesheet" href="./css/styles.css">
+</head>
+
+<body>
+  <div class="layout" style="grid-template-columns: 280px 1fr;">
+    <aside class="sidebar">
+      <div class="brand">Admin Editor</div>
+
+      <div class="small">
+        Only admins can add/edit/delete. Others will see read-only.
+      </div>
+
+      <div class="small" style="margin-top:10px;">
+        <a href="./index.html">← Back to Toolkit</a>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div id="adminRoot"></div>
+    </main>
+  </div>
+
+  <script type="module" src="./js/adminApp.js"></script>
+</body>
+</html>
