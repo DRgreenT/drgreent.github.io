@@ -1,8 +1,8 @@
 // =====================================
 // Supabase (FREE cloud DB) setup
 // =====================================
-const SUPABASE_URL = "https://YOUR_PROJECT_ID.supabase.co";
-const SUPABASE_ANON_KEY = "YOUR_ANON_PUBLIC_KEY";
+const SUPABASE_URL = "https://artcxskvrbvxcwybcblx.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_XAiOftT-_u-pgSWguvYE3Q_WPbmaWyP";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const TABLE = "bank_numbers";
