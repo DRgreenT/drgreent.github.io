@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="de">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Text-Formatter + Keyword Highlight</title>
+  <title>HighlightIt – Text Formatter & Keyword Highlight</title>
   <link rel="stylesheet" href="./css/styles.css">
   <script src="./js/app.js" defer></script>
 </head>
@@ -12,10 +12,10 @@
   <div class="wrap">
     <header>
       <div>
-        <h1>Text-Formatter + Keyword Highlight</h1>
+        <h1>HighlightIt</h1>
         <p class="sub">
-          Füge Text ein, optional HTML entfernen, dann Keywords markieren (kommagetrennt oder in Anführungszeichen).
-          Alles aktualisiert sich live.
+          Paste text, optionally strip HTML, then highlight keywords (comma-separated or quoted).
+          Everything updates live.
         </p>
       </div>
     </header>
@@ -24,57 +24,57 @@
       <!-- INPUT -->
       <section class="card">
         <div class="cardHead">
-          <strong>Eingabe</strong>
+          <strong>Input</strong>
           <div class="controls">
-            <label class="toggle" title="Entfernt HTML-Tags (z.B. <b>, <div>), dekodiert Entities und normalisiert Leerzeichen.">
+            <label class="toggle" title="Removes HTML tags (e.g. <b>, <div>), decodes entities, and normalizes whitespace.">
               <input id="stripHtml" type="checkbox" />
-              HTML-Tags entfernen
+              Strip HTML tags
             </label>
-            <button class="btn" id="clearBtn" type="button">Leeren</button>
-            <button class="btn" id="sampleBtn" type="button">Beispiel</button>
+            <button class="btn" id="clearBtn" type="button">Clear</button>
+            <button class="btn" id="sampleBtn" type="button">Example</button>
           </div>
         </div>
 
         <div class="content">
-          <textarea id="inputText" placeholder="Hier Text einfügen... (kann auch HTML enthalten)"></textarea>
+          <textarea id="inputText" placeholder="Paste text here... (HTML is supported)"></textarea>
 
           <div>
             <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
               <strong style="font-size:13px;">Keywords</strong>
               <span style="color: rgba(255,255,255,.55); font-size:12px;">
-                z.B.: <span style="font-family:var(--mono);">"black hole", LOFAR, 1420 MHz</span>
+                e.g.: <span style="font-family:var(--mono);">"black hole", LOFAR, 1420 MHz</span>
               </span>
             </div>
-            <input id="keywords" type="text" placeholder='Keywords (kommagetrennt oder "als Phrase")' />
+            <input id="keywords" type="text" placeholder='Keywords (comma-separated or "as phrase")' />
           </div>
 
           <div class="stats" aria-live="polite">
-            <span class="pill" id="wordCount">Wörter: 0</span>
+            <span class="pill" id="wordCount">Words: 0</span>
             <span class="pill" id="kwCount">Keywords: 0</span>
-            <span class="pill" id="hitCount">Treffer: 0</span>
+            <span class="pill" id="hitCount">Matches: 0</span>
           </div>
         </div>
 
         <div class="hint">
-          Tipp: Phrasen in <span style="font-family:var(--mono);">"Anführungszeichen"</span> bleiben als ein Keyword.
-          Sonderzeichen werden automatisch sicher behandelt (keine Regex-Probleme).
+          Tip: Phrases in <span style="font-family:var(--mono);">"quotation marks"</span> are treated as a single keyword.
+          Special characters are handled safely (no regex issues).
         </div>
       </section>
 
       <!-- OUTPUT -->
       <section class="card">
         <div class="cardHead">
-          <strong>Ausgabe (neuformatiert + Highlight)</strong>
+          <strong>Output (formatted + highlighted)</strong>
           <div class="controls">
-            <button class="btn" id="copyBtn" type="button">Text kopieren</button>
+            <button class="btn" id="copyBtn" type="button">Copy text</button>
           </div>
         </div>
         <div class="content">
-          <div id="output" class="outBox" role="region" aria-label="Ausgabetext"></div>
+          <div id="output" class="outBox" role="region" aria-label="Output text"></div>
         </div>
         <div class="hint">
-          Output ist reiner Text (bzw. Markup nur fürs Highlight). Wenn „HTML-Tags entfernen“ aktiv ist,
-          wird aus HTML sauberer Text.
+          Output is plain text (markup is only used for highlighting).  
+          If “Strip HTML tags” is enabled, HTML input will be converted into clean text.
         </div>
       </section>
     </div>
