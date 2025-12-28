@@ -18,59 +18,28 @@ import {
   deleteNote,
 } from "./numbers.shared.js";
 
+/**
+ * Render the Numbers public tool into the given root element.
+ * Includes filtering, search, and the notes modal.
+ */
 export async function renderNumbersView(viewRoot) {
+  viewRoot.innerHTML = "Loading...";
+
   const session = await getSession();
 
   viewRoot.innerHTML = renderShell({
-    title: "Numbers (Read-only)",
-    subtitle: "Login required to view the list.",
+    title: "Bank Numbers",
+    subtitle: "Browse and search. Notes are shared with all users.",
     session,
   });
 
-  const { refreshBtn } = await wireAuth({
+  await wireAuth({
     root: viewRoot,
     onAuthedRerender: () => renderNumbersView(viewRoot),
+    signupHint: "If you just signed up, you might need to confirm your email first.",
   });
 
-  const session2 = await getSession();
-  if (!session2) return;
-  const myUid = session2.user.id;
-
-  const bodyRoot = viewRoot.querySelector("#bodyRoot");
-  const showAdminLink = await adminLinkVisible();
-
-  bodyRoot.innerHTML = `
-    ${buildFiltersUI({ showAdminLink })}
-    ${buildTableUI({ actions: false, extraHeaderHtml: `<th style="width:140px;">Notes</th>` })}
-    ${notesModalHtml()}
-    ${notesModalCss()}
-  `;
-
-  const FLT = getFilters(viewRoot);
-
-  let allRows = [];
-  let notesByBankId = new Map();
-  let activeBankId = null;
-
-  function filteredRows() {
-    return allRows.filter((r) => passesFilters(r, FLT));
-  }
-
-  function render() {
-    const list = filteredRows();
-
-    renderRows(viewRoot, list, {
-      actions: false,
-      extraCellHtml: (r) => {
-        const cnt = notesByBankId.get(r.id)?.length || 0;
-        return `<button class="btn" type="button" data-notes="${esc(r.id)}">Notes (${cnt})</button>`;
-      },
-    });
-
-    viewRoot.querySelectorAll("[data-notes]").forEach((btn) => {
-      btn.addEventListener("click", () => openNotes(btn.getAttribute("data-notes")));
-    });
-  }
+  const slot = viewRoot.querySelector("#slot");
 
   function notesModalHtml() {
     return `
@@ -86,21 +55,15 @@ export async function renderNumbersView(viewRoot) {
               Notes are visible to all users. You can edit/delete only the notes you created.
             </div>
 
-            <div id="notesList" style="display:grid; gap:8px;"></div>
+            <div id="notesList" style="display:grid; gap:10px;"></div>
 
-            <div class="card" style="border-radius:14px;">
-              <div class="cardHead">
-                <strong>Add a note</strong>
-              </div>
-              <div class="cardBody" style="gap:10px;">
-                <textarea id="notesText" placeholder="Write a note..." style="min-height:90px;"></textarea>
-                <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-                  <button class="btn" id="notesAdd" type="button">Add note</button>
-                  <span id="notesMsg" style="color:rgba(255,255,255,.68); font-size:12px;"></span>
-                </div>
+            <div style="display:grid; gap:8px;">
+              <textarea class="input" id="noteNewText" style="min-height:80px;" placeholder="Write a note..."></textarea>
+              <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                <button class="btn" id="noteAddBtn" type="button">Add note</button>
+                <span id="noteMsg" style="color:rgba(255,255,255,.68); font-size:12px;"></span>
               </div>
             </div>
-
           </div>
         </div>
       </div>
@@ -111,70 +74,103 @@ export async function renderNumbersView(viewRoot) {
     return `
       <style>
         .modal{
-          position: fixed;
-          inset: 0;
+          position:fixed; inset:0;
           background: rgba(0,0,0,.55);
           padding: 24px;
-          z-index: 999;
+          z-index: 9999;
           overflow:auto;
         }
-        .modalInner{ margin-top: 20px; }
-        .noteMeta{
-          color:rgba(255,255,255,.68);
-          font-size:12px;
-          display:flex;
-          gap:10px;
-          justify-content:space-between;
-          align-items:center;
-          flex-wrap:wrap;
-        }
-        .noteActions{
-          display:flex;
-          gap:10px;
-          flex-wrap:wrap;
-          justify-content:flex-end;
-          align-items:center;
-        }
+        .modalInner{margin-top: 10px;}
       </style>
     `;
   }
 
-  function openNotes(bankId) {
-    activeBankId = bankId;
+  slot.innerHTML = `
+    <div style="display:grid; gap:14px;">
+      ${buildFiltersUI()}
+      <div id="tableBox">${buildTableUI({ actions: false, extraHeaderHtml: "Notes" })}</div>
+      <div id="adminLinkBox" style="display:none;"></div>
+      ${notesModalHtml()}
+      ${notesModalCss()}
+    </div>
+  `;
 
-    const modal = viewRoot.querySelector("#notesModal");
-    const listEl = viewRoot.querySelector("#notesList");
-    const titleEl = viewRoot.querySelector("#notesTitle");
-    const msgEl = viewRoot.querySelector("#notesMsg");
-    const txtEl = viewRoot.querySelector("#notesText");
+  const adminLinkBox = slot.querySelector("#adminLinkBox");
+  if (adminLinkBox) {
+    const showAdmin = await adminLinkVisible();
+    if (showAdmin) {
+      adminLinkBox.style.display = "block";
+      adminLinkBox.innerHTML = `
+        <div class="card" style="border-radius:14px;">
+          <div class="cardHead"><strong>Admin</strong></div>
+          <div class="cardBody">
+            <a href="./admin.html">Open admin editor</a>
+          </div>
+        </div>
+      `;
+    }
+  }
 
-    msgEl.textContent = "";
-    txtEl.value = "";
+  const notesModal = slot.querySelector("#notesModal");
+  const notesClose = slot.querySelector("#notesClose");
+  const notesTitle = slot.querySelector("#notesTitle");
+  const notesList = slot.querySelector("#notesList");
+  const noteNewText = slot.querySelector("#noteNewText");
+  const noteAddBtn = slot.querySelector("#noteAddBtn");
+  const noteMsg = slot.querySelector("#noteMsg");
 
-    const row = allRows.find((x) => x.id === bankId);
-    titleEl.textContent = row ? `Notes — ${row.bankname}` : "Notes";
+  let list = [];
+  let filtered = [];
+  let notesByBankId = new Map();
+  let activeNotesBankId = null;
+  let activeNotesBankName = "";
+
+  notesClose?.addEventListener("click", () => {
+    if (notesModal) notesModal.style.display = "none";
+    activeNotesBankId = null;
+    activeNotesBankName = "";
+    if (notesList) notesList.innerHTML = "";
+    if (noteMsg) noteMsg.textContent = "";
+    if (noteNewText) noteNewText.value = "";
+  });
+
+  function openNotes(bankId, bankName) {
+    activeNotesBankId = bankId;
+    activeNotesBankName = bankName || "";
+    if (notesTitle) notesTitle.textContent = `Notes — ${esc(activeNotesBankName)}`;
+    if (notesModal) notesModal.style.display = "block";
+    reloadNotesFor(bankId);
+  }
+
+  async function reloadNotesFor(bankId) {
+    if (!notesList || !noteMsg) return;
+    noteMsg.textContent = "";
+    notesList.innerHTML = "";
 
     const notes = notesByBankId.get(bankId) || [];
-    listEl.innerHTML = notes.length
-      ? notes.map((n) => {
-          const when = new Date(n.created_at).toLocaleString();
-          const canEdit = n.created_by === myUid;
+    const s = await getSession();
+    const myUserId = s?.user?.id;
 
-          // For creator: inline edit textarea
-          const editUi = canEdit
+    notesList.innerHTML = notes.length
+      ? notes.map(n => {
+          const when = new Date(n.created_at).toLocaleString();
+          const updated = n.updated_at ? ` • updated: ${new Date(n.updated_at).toLocaleString()}` : "";
+          const mine = myUserId && n.created_by === myUserId;
+
+          const editUi = mine
             ? `
               <div class="noteActions">
-                <button class="btn" type="button" data-editnote="${esc(n.id)}">Edit</button>
-                <button class="btn" type="button" data-delnote="${esc(n.id)}">Delete</button>
+                <button class="btnRow" type="button" data-editnote="${esc(n.id)}">Edit</button>
+                <button class="btnRow btnRowDanger" type="button" data-delnote="${esc(n.id)}">Delete</button>
               </div>
             `
-            : `<div class="noteActions"><span style="opacity:.7;">(read-only)</span></div>`;
+            : "";
 
           return `
             <div class="card" style="border-radius:14px;">
               <div class="cardBody" style="gap:8px;">
                 <div class="noteMeta">
-                  <span>${esc(when)}</span>
+                  <span>${esc(when)}${esc(updated)}</span>
                   ${editUi}
                 </div>
 
@@ -182,9 +178,9 @@ export async function renderNumbersView(viewRoot) {
 
                 <div data-noteeditwrap="${esc(n.id)}" style="display:none; gap:10px;">
                   <textarea data-noteedit="${esc(n.id)}" style="min-height:80px;">${esc(n.note_text)}</textarea>
-                  <div class="noteActions">
-                    <button class="btn" type="button" data-savenote="${esc(n.id)}">Save</button>
-                    <button class="btn" type="button" data-cancelnote="${esc(n.id)}">Cancel</button>
+                  <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                    <button class="btnRow" type="button" data-savenote="${esc(n.id)}">Save</button>
+                    <button class="btnRow" type="button" data-cancelnote="${esc(n.id)}">Cancel</button>
                   </div>
                 </div>
               </div>
@@ -193,116 +189,133 @@ export async function renderNumbersView(viewRoot) {
         }).join("")
       : `<div style="color:rgba(255,255,255,.68); font-size:12px;">No notes yet.</div>`;
 
-    modal.style.display = "block";
-
-    viewRoot.querySelector("#notesClose").onclick = () => {
-      modal.style.display = "none";
-      activeBankId = null;
-    };
-
-    viewRoot.querySelector("#notesAdd").onclick = async () => {
-      const text = txtEl.value.trim();
-      if (!text) { msgEl.textContent = "Please enter a note."; return; }
-
-      msgEl.textContent = "Saving...";
-      const res = await addNote(bankId, text);
-      if (res.error) { msgEl.textContent = res.error.message; return; }
-
-      await reloadNotesFor(bankId);
-      msgEl.textContent = "Saved.";
-      openNotes(bankId);
-      render();
-    };
-
-    // Creator edit/delete handlers
-    listEl.querySelectorAll("[data-editnote]").forEach((btn) => {
+    // Wire edit/delete
+    notesList.querySelectorAll("[data-editnote]").forEach(btn => {
       btn.addEventListener("click", () => {
-        const id = btn.getAttribute("data-editnote");
-        const wrap = listEl.querySelector(`[data-noteeditwrap="${CSS.escape(id)}"]`);
-        const view = listEl.querySelector(`[data-noteview="${CSS.escape(id)}"]`);
-        if (wrap && view) {
-          wrap.style.display = "grid";
-          view.style.display = "none";
-        }
+        const id = btn.dataset.editnote;
+        notesList.querySelector(`[data-noteview="${id}"]`)?.setAttribute("style", "display:none;");
+        notesList.querySelector(`[data-noteeditwrap="${id}"]`)?.setAttribute("style", "display:grid; gap:10px;");
       });
     });
 
-    listEl.querySelectorAll("[data-cancelnote]").forEach((btn) => {
+    notesList.querySelectorAll("[data-cancelnote]").forEach(btn => {
       btn.addEventListener("click", () => {
-        const id = btn.getAttribute("data-cancelnote");
-        const wrap = listEl.querySelector(`[data-noteeditwrap="${CSS.escape(id)}"]`);
-        const view = listEl.querySelector(`[data-noteview="${CSS.escape(id)}"]`);
-        if (wrap && view) {
-          wrap.style.display = "none";
-          view.style.display = "block";
+        const id = btn.dataset.cancelnote;
+        notesList.querySelector(`[data-noteview="${id}"]`)?.setAttribute("style", "display:block;");
+        notesList.querySelector(`[data-noteeditwrap="${id}"]`)?.setAttribute("style", "display:none;");
+      });
+    });
+
+    notesList.querySelectorAll("[data-savenote]").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const id = btn.dataset.savenote;
+        const ta = notesList.querySelector(`[data-noteedit="${id}"]`);
+        const text = (ta?.value || "").trim();
+        if (!text) return;
+
+        const s2 = await getSession();
+        const res2 = await updateNote(id, text, s2?.user?.id);
+        if (res2.error) {
+          noteMsg.textContent = res2.error.message || "Failed to update note.";
+          return;
         }
+        await load(); // refresh notes map + list
+        await reloadNotesFor(bankId);
       });
     });
 
-    listEl.querySelectorAll("[data-savenote]").forEach((btn) => {
+    notesList.querySelectorAll("[data-delnote]").forEach(btn => {
       btn.addEventListener("click", async () => {
-        const id = btn.getAttribute("data-savenote");
-        const ta = listEl.querySelector(`[data-noteedit="${CSS.escape(id)}"]`);
-        const newText = ta?.value || "";
-        msgEl.textContent = "Saving...";
-
-        const res = await updateNote(id, newText, myUid);
-        if (res.error) { msgEl.textContent = res.error.message; return; }
-
+        const id = btn.dataset.delnote;
+        const ok = confirm("Delete note?");
+        if (!ok) return;
+        const res2 = await deleteNote(id);
+        if (res2.error) {
+          noteMsg.textContent = res2.error.message || "Failed to delete note.";
+          return;
+        }
+        await load();
         await reloadNotesFor(bankId);
-        msgEl.textContent = "Saved.";
-        openNotes(bankId);
-        render();
-      });
-    });
-
-    listEl.querySelectorAll("[data-delnote]").forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        const id = btn.getAttribute("data-delnote");
-        if (!confirm("Delete this note?")) return;
-
-        msgEl.textContent = "Deleting...";
-        const res = await deleteNote(id);
-        if (res.error) { msgEl.textContent = res.error.message; return; }
-
-        await reloadNotesFor(bankId);
-        msgEl.textContent = "Deleted.";
-        openNotes(bankId);
-        render();
       });
     });
   }
 
-  async function reloadNotesFor(bankId) {
-    const res = await loadNotesForBankIds([bankId]);
-    if (res.error) { alert(res.error.message); return; }
-    const m = groupNotesByBankId(res.data || []);
-    notesByBankId = new Map(notesByBankId);
-    notesByBankId.set(bankId, m.get(bankId) || []);
-  }
+  noteAddBtn?.addEventListener("click", async () => {
+    if (!noteMsg || !noteNewText) return;
+    noteMsg.textContent = "";
 
-  wireFilters({ FLT, onChange: render });
+    if (!activeNotesBankId) {
+      noteMsg.textContent = "No entry selected.";
+      return;
+    }
+
+    const text = (noteNewText.value || "").trim();
+    if (!text) return;
+
+    const res = await addNote(activeNotesBankId, text);
+    if (res.error) {
+      noteMsg.textContent = res.error.message || "Failed to add note.";
+      return;
+    }
+
+    noteNewText.value = "";
+    await load();
+    await reloadNotesFor(activeNotesBankId);
+  });
+
+  function notesCellHtml(r) {
+    const notes = notesByBankId.get(r.id) || [];
+    const label = notes.length ? `${notes.length} note${notes.length === 1 ? "" : "s"}` : "Notes";
+    return `<button class="btnRow" type="button" data-notes="${esc(r.id)}">${esc(label)}</button>`;
+  }
 
   async function load() {
     const res = await loadAllRows();
-    if (res.error) return alert(res.error.message);
-
-    allRows = res.data || [];
-
-    const ids = allRows.map((x) => x.id).filter(Boolean);
-    const notesRes = await loadNotesForBankIds(ids);
-
-    if (notesRes.error) {
-      alert(notesRes.error.message);
-      notesByBankId = new Map();
-    } else {
-      notesByBankId = groupNotesByBankId(notesRes.data || []);
+    if (res.error) {
+      viewRoot.innerHTML = `<div class="card"><div class="cardBody">Load error: ${esc(res.error.message || "unknown")}</div></div>`;
+      return;
     }
 
-    render();
+    list = res.data || [];
+
+    // Load notes for all entries in one go
+    const ids = list.map(x => x.id);
+    const notesRes = await loadNotesForBankIds(ids);
+    const notes = notesRes?.data || [];
+    notesByBankId = groupNotesByBankId(notes);
+
+    // Populate countries select
+    const countrySel = slot.querySelector("#f_country");
+    if (countrySel) {
+      const countries = [...new Set(list.map(r => r.country).filter(Boolean))].sort();
+      const current = countrySel.value || "";
+      countrySel.innerHTML = `<option value="">All countries</option>` + countries.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join("");
+      countrySel.value = current;
+    }
+
+    applyFilters();
   }
 
-  refreshBtn?.addEventListener("click", load);
+  function applyFilters() {
+    const filters = getFilters(slot);
+    filtered = list.filter(r => passesFilters(r, filters));
+
+    renderRows(slot, filtered, {
+      actions: false,
+      extraCellHtml: notesCellHtml,
+    });
+
+    // Notes open handling
+    slot.querySelectorAll("[data-notes]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const id = btn.dataset.notes;
+        const row = list.find(x => String(x.id) === String(id));
+        openNotes(id, row?.bankname || "");
+      });
+    });
+  }
+
+  wireFilters(slot, applyFilters);
 
   await load();
 }
