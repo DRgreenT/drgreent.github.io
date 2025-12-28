@@ -7,10 +7,6 @@ import { TABLE, COLUMNS, NOTES_TABLE } from "./numbers.schema.js";
 // Shell + Auth
 // ---------------------------
 
-/**
- * Build the common page shell (title/subtitle + auth toolbar).
- * Returns HTML as a string.
- */
 export function renderShell({ title, subtitle, session }) {
   return `
     <section class="card">
@@ -22,93 +18,79 @@ export function renderShell({ title, subtitle, session }) {
         </div>
       </div>
 
-      <div class="cardBody">
-        <div style="display:grid; gap:10px;">
-          <div style="display:flex; gap:10px; align-items:center; justify-content:space-between; flex-wrap:wrap;">
-            <div style="display:grid;">
-              <div style="color:rgba(255,255,255,.92); font-size:13px;">${esc(subtitle || "")}</div>
-              <div id="authStatus" style="color:rgba(255,255,255,.68); font-size:12px;">
-                ${session ? `Signed in: ${esc(session.user.email)}` : "Not signed in"}
-              </div>
-            </div>
-
-            <div id="authBox" style="display:${session ? "none" : "flex"}; gap:10px; align-items:center; flex-wrap:wrap;">
-              <input class="input" id="email" placeholder="email" style="width:220px;" />
-              <input class="input" id="pw" placeholder="password" type="password" style="width:220px;" />
+      <div class="cardBody" style="gap:14px;">
+        <div class="card" style="border-radius:14px;">
+          <div class="cardHead">
+            <strong>Login</strong>
+            <span style="color:rgba(255,255,255,.68); font-size:12px;">${esc(subtitle)}</span>
+          </div>
+          <div class="cardBody" id="authBox" style="display:${session ? "none" : "grid"}; gap:10px;">
+            <input id="email" type="text" placeholder="Email">
+            <input id="password" type="password" placeholder="Password">
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
               <button class="btn" id="loginBtn" type="button">Login</button>
               <button class="btn" id="signupBtn" type="button">Sign up</button>
-              <span id="authMsg" style="color:rgba(255,255,255,.68); font-size:12px;"></span>
             </div>
+            <div id="authMsg" style="color:rgba(255,255,255,.68); font-size:12px;"></div>
           </div>
-
-          <div id="slot"></div>
         </div>
+
+        <div id="bodyRoot" style="display:${session ? "grid" : "none"}; gap:14px;"></div>
       </div>
     </section>
   `;
 }
 
-/**
- * Render a simple access denied / not-authorized message.
- */
-export function renderAccessDenied() {
-  return `
-    <section class="card">
-      <div class="cardHead"><strong>Access denied</strong></div>
-      <div class="cardBody">
-        <div style="color:rgba(255,255,255,.72); font-size:13px;">
-          You don't have the required permissions for this page.
-        </div>
-      </div>
-    </section>
-  `;
-}
-
-/**
- * Wire login/signup/logout controls inside a rendered shell.
- * Calls onAuthedRerender() after a successful auth state change.
- */
 export async function wireAuth({ root, onAuthedRerender, signupHint }) {
-  const refreshBtn = root.querySelector("#refreshBtn");
-  const logoutBtn = root.querySelector("#logoutBtn");
+  const authMsg = root.querySelector("#authMsg");
   const loginBtn = root.querySelector("#loginBtn");
   const signupBtn = root.querySelector("#signupBtn");
-  const emailEl = root.querySelector("#email");
-  const pwEl = root.querySelector("#pw");
-  const authMsg = root.querySelector("#authMsg");
+  const logoutBtn = root.querySelector("#logoutBtn");
+  const refreshBtn = root.querySelector("#refreshBtn");
 
-  refreshBtn?.addEventListener("click", () => onAuthedRerender?.());
-  logoutBtn?.addEventListener("click", async () => {
-    await signOut();
-    onAuthedRerender?.();
-  });
-
-  async function doAuth(fn) {
-    if (!emailEl || !pwEl || !authMsg) return;
-    authMsg.textContent = "";
-    const email = (emailEl.value || "").trim();
-    const pw = (pwEl.value || "").trim();
-    if (!email || !pw) {
-      authMsg.textContent = "Email and password required.";
-      return;
-    }
-    const res = await fn(email, pw);
-    if (res.error) {
-      authMsg.textContent = res.error.message || "Auth failed.";
-      return;
-    }
-    authMsg.textContent = signupHint || "";
-    onAuthedRerender?.();
+  if (loginBtn) {
+    loginBtn.addEventListener("click", async () => {
+      authMsg.textContent = "";
+      const email = root.querySelector("#email")?.value?.trim() || "";
+      const password = root.querySelector("#password")?.value || "";
+      const { error } = await signIn(email, password);
+      if (error) authMsg.textContent = error.message;
+      else onAuthedRerender();
+    });
   }
 
-  loginBtn?.addEventListener("click", () => doAuth(signIn));
-  signupBtn?.addEventListener("click", () => doAuth(signUp));
+  if (signupBtn) {
+    signupBtn.addEventListener("click", async () => {
+      authMsg.textContent = "";
+      const email = root.querySelector("#email")?.value?.trim() || "";
+      const password = root.querySelector("#password")?.value || "";
+      const { error } = await signUp(email, password);
+      authMsg.textContent = error
+        ? error.message
+        : (signupHint || "Signed up. If email confirmation is enabled, check your inbox.");
+    });
+  }
+
+  if (logoutBtn) {
+    logoutBtn.addEventListener("click", async () => {
+      await signOut();
+      onAuthedRerender();
+    });
+  }
+
+  return { refreshBtn };
 }
 
-/**
- * Returns { session, isAdmin } for the current user.
- * isAdmin is derived from your auth rules / helper.
- */
+// ---------------------------
+// Permissions helpers
+// ---------------------------
+
+export async function adminLinkVisible() {
+  const s = await getSession();
+  if (!s) return false;
+  return await isAdminUser();
+}
+
 export async function requireAdmin() {
   const s = await getSession();
   if (!s) return { session: null, isAdmin: false };
@@ -116,275 +98,180 @@ export async function requireAdmin() {
   return { session: s, isAdmin: ok };
 }
 
-// ---------------------------
-// Filtering / search helpers
-// ---------------------------
-
-/**
- * Convert a row into a searchable string used by the client-side search.
- */
-export function haystack(r) {
-  return [
-    r.bankname,
-    r.bic,
-    r.country,
-    r.postcode,
-    r.city,
-    r.title,
-    r.ibanstart,
-    r.url,
-    r.ems ? "EMS" : "Non-EMS",
-  ]
-    .filter(Boolean)
-    .join(" • ");
-}
-
-/**
- * Client-side filter predicate for the list view.
- */
-export function passesFilters(row, filters) {
-  const q = (filters.q || "").trim();
-  if (q && !includesCI(haystack(row), q)) return false;
-
-  if (filters.onlyEms === true && !row.ems) return false;
-  if (filters.onlyEms === false && row.ems) return false;
-
-  if (filters.country && row.country !== filters.country) return false;
-
-  return true;
-}
-
-// ---------------------------
-// Admin form
-// ---------------------------
-
-/**
- * Build the admin editor form HTML.
- */
-export function buildAdminFormUI() {
-  const fields = COLUMNS.map(c => {
-    if (c.key === "id") return ""; // id is not editable
-    const label = esc(c.label);
-    if (c.type === "bool") {
-      return `
-        <label style="display:flex; align-items:center; gap:10px;">
-          <span style="width:140px; color:rgba(255,255,255,.72); font-size:12px;">${label}</span>
-          <input type="checkbox" id="f_${esc(c.key)}" />
-        </label>
-      `;
-    }
-    return `
-      <label style="display:grid; gap:6px;">
-        <span style="color:rgba(255,255,255,.72); font-size:12px;">${label}</span>
-        <input class="input" id="f_${esc(c.key)}" placeholder="${label}" />
-      </label>
-    `;
-  }).join("");
-
+export function renderAccessDenied() {
   return `
     <div class="card" style="border-radius:14px;">
-      <div class="cardHead"><strong>Editor</strong></div>
+      <div class="cardHead"><strong>Access denied</strong></div>
       <div class="cardBody">
-        <div id="saveMsg" style="color:rgba(255,255,255,.68); font-size:12px;"></div>
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
-          ${fields}
-        </div>
-        <div style="display:flex; gap:10px; flex-wrap:wrap;">
-          <button class="btn" id="newBtn" type="button">New</button>
-          <button class="btn" id="saveBtn" type="button">Save</button>
-          <button class="btn" id="clearBtn" type="button">Clear</button>
-        </div>
+        You are logged in, but you are not an admin.
+        Ask an admin to add your user id to <span class="mono">admin_users</span>.
       </div>
     </div>
   `;
 }
 
-/**
- * Collect and return input references from the admin form.
- */
+// ---------------------------
+// Filters logic (used in view)
+// ---------------------------
+
+export function haystack(row) {
+  return COLUMNS.map(c => {
+    const v = row[c.key];
+    if (c.type === "bool") return v ? "ems" : "non-ems";
+    return (v ?? "").toString();
+  }).join(" | ").toLowerCase();
+}
+
+export function passesFilters(row, FLT) {
+  const qGlobal = (FLT.globalSearch?.value || "").trim().toLowerCase();
+  const qEms = (FLT.isems?.value || "").trim();
+
+  for (const [key, el] of Object.entries(FLT.fields || {})) {
+    const q = (el?.value || "").trim().toLowerCase();
+    if (!includesCI(row[key], q)) return false;
+  }
+
+  if (qEms !== "") {
+    const want = qEms === "true";
+    if (!!row.isems_number !== want) return false;
+  }
+
+  if (qGlobal && !haystack(row).includes(qGlobal)) return false;
+  return true;
+}
+
+// ---------------------------
+// Admin form (schema-driven)
+// ---------------------------
+
+function groupColumnsForForm() {
+  const cols = COLUMNS.filter(c => c.form);
+  const groups = new Map();
+  for (const c of cols) {
+    const g = c.group ?? 99;
+    if (!groups.has(g)) groups.set(g, []);
+    groups.get(g).push(c);
+  }
+  return [...groups.entries()].sort((a, b) => a[0] - b[0]).map(([_, arr]) => arr);
+}
+
+function gridClassForCount(n) {
+  if (n <= 2) return "grid2";
+  if (n === 3) return "grid3";
+  return "grid4";
+}
+
+function formControlHTML(c) {
+  if (c.type === "bool") {
+    return `
+      <select id="${esc(c.key)}">
+        <option value="false">Non-EMS</option>
+        <option value="true">EMS</option>
+      </select>
+    `;
+  }
+
+  const star = c.required ? " *" : "";
+  const ph = `${c.label}${star}${c.type === "url" ? " (https://...)" : ""}`;
+  return `<input id="${esc(c.key)}" type="text" placeholder="${esc(ph)}">`;
+}
+
+export function buildAdminFormUI() {
+  const groups = groupColumnsForForm();
+
+  const groupHtml = groups.map(cols => `
+    <div class="${gridClassForCount(cols.length)}">
+      ${cols.map(formControlHTML).join("")}
+    </div>
+  `).join("\n");
+
+  return `
+    <div class="card" style="border-radius:14px;">
+      <div class="cardHead">
+        <strong>Add / Edit / Delete</strong>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <button class="btn" id="newBtn" type="button">New</button>
+          <button class="btn" id="saveBtn" type="button">Save</button>
+        </div>
+      </div>
+
+      <div class="cardBody" style="gap:10px;">
+        ${groupHtml}
+        <div id="saveMsg" style="color:rgba(255,255,255,.68); font-size:12px;"></div>
+      </div>
+    </div>
+  `;
+}
+
 export function getFormRefs(root) {
   const refs = {};
   for (const c of COLUMNS) {
-    if (c.key === "id") continue;
-    refs[c.key] = root.querySelector(`#f_${c.key}`);
+    if (!c.form) continue;
+    refs[c.key] = root.querySelector(`#${CSS.escape(c.key)}`);
   }
   return refs;
 }
 
-/**
- * Reset the admin form to an empty state.
- */
 export function clearForm(refs) {
-  for (const [k, el] of Object.entries(refs)) {
-    if (!el) continue;
-    if (el.type === "checkbox") el.checked = false;
-    else el.value = "";
-  }
-}
-
-/**
- * Fill the admin form with a row payload.
- */
-export function fillForm(refs, row) {
-  for (const [k, el] of Object.entries(refs)) {
-    if (!el) continue;
-    const v = row?.[k];
-    if (el.type === "checkbox") el.checked = !!v;
-    else el.value = v ?? "";
-  }
-}
-
-/**
- * Read values from the admin form and build a payload for insert/update.
- */
-export function payloadFromForm(refs) {
-  const p = {};
   for (const c of COLUMNS) {
-    if (c.key === "id") continue;
+    if (!c.form) continue;
     const el = refs[c.key];
     if (!el) continue;
-    if (c.type === "bool") p[c.key] = !!el.checked;
-    else p[c.key] = (el.value || "").trim();
+
+    if (c.type === "bool" && el.tagName === "SELECT") el.value = "false";
+    else el.value = "";
   }
-  return p;
+  refs.bankname?.focus?.();
 }
 
-/**
- * Validate the editor payload. Returns an error string or null.
- */
-export function validatePayload(p) {
-  if (!p.bankname) return "bankname is required.";
-  if (!p.bic) return "bic is required.";
-  if (!p.country) return "country is required.";
+export function fillForm(refs, item) {
+  for (const c of COLUMNS) {
+    if (!c.form) continue;
+    const el = refs[c.key];
+    if (!el) continue;
+
+    if (c.type === "bool") el.value = item[c.key] ? "true" : "false";
+    else el.value = item[c.key] ?? "";
+  }
+  refs.bankname?.focus?.();
+}
+
+export function payloadFromForm(refs) {
+  const payload = {};
+  for (const c of COLUMNS) {
+    if (!c.form) continue;
+    const el = refs[c.key];
+    if (!el) continue;
+
+    if (c.type === "bool") {
+      payload[c.key] = el.value === "true";
+      continue;
+    }
+
+    const v = (el.value ?? "").toString().trim();
+    payload[c.key] = v ? v : null;
+  }
+  return payload;
+}
+
+export function validatePayload(payload, { isValidUrlMaybe }) {
+  for (const c of COLUMNS) {
+    if (!c.required) continue;
+    const v = payload[c.key];
+    if (!v) return `${c.label} is required.`;
+  }
+
+  if (payload.bankwebsite && !isValidUrlMaybe(payload.bankwebsite)) {
+    return "Bank website must be a valid URL (https://...)";
+  }
+
   return null;
 }
 
 // ---------------------------
-// DB loaders
+// Table helpers (simple, stable)
 // ---------------------------
 
-/**
- * Load all bank-number rows.
- */
-export async function loadAllRows() {
-  return await sb
-    .from(TABLE)
-    .select("*")
-    .order("bankname", { ascending: true });
-}
-
-/**
- * Load all rows and also include a notes-count (for admin filtering).
- */
-export async function loadAllRowsWithNotesCount() {
-  const res = await sb
-    .from(TABLE)
-    .select("*, notes:bank_number_notes(count)")
-    .order("bankname", { ascending: true });
-
-  if (res.error) return res;
-
-  const list = (res.data || []).map(r => ({
-    ...r,
-    notes_count: (r.notes?.[0]?.count ?? 0),
-  }));
-
-  return { data: list, error: null };
-}
-
-/**
- * Load notes for a single bank_number_id.
- */
-export async function loadNotesForBankId(bankId) {
-  return await sb
-    .from(NOTES_TABLE)
-    .select("id, bank_number_id, note_text, created_at, created_by, updated_at, updated_by")
-    .eq("bank_number_id", bankId)
-    .order("created_at", { ascending: false });
-}
-
-/**
- * Load notes for many bank_number_id values.
- */
-export async function loadNotesForBankIds(bankIds) {
-  if (!bankIds?.length) return { data: [], error: null };
-  return await sb
-    .from(NOTES_TABLE)
-    .select("id, bank_number_id, note_text, created_at, created_by, updated_at, updated_by")
-    .in("bank_number_id", bankIds)
-    .order("created_at", { ascending: false });
-}
-
-/**
- * Group notes by bank_number_id (Map<id, notes[]>).
- */
-export function groupNotesByBankId(notes) {
-  const map = new Map();
-  for (const n of notes || []) {
-    const k = n.bank_number_id;
-    if (!map.has(k)) map.set(k, []);
-    map.get(k).push(n);
-  }
-  return map;
-}
-
-/**
- * Insert a note for a bank_number_id.
- */
-export async function addNote(bankNumberId, noteText) {
-  const s = await getSession();
-  if (!s) return { data: null, error: new Error("Not signed in.") };
-
-  return await sb
-    .from(NOTES_TABLE)
-    .insert({
-      bank_number_id: bankNumberId,
-      note_text: noteText,
-      created_by: s.user.id,
-    })
-    .select("*")
-    .single();
-}
-
-/**
- * Update note text. Only allowed for the note owner (enforced server-side).
- */
-export async function updateNote(noteId, newText, userId) {
-  return await sb
-    .from(NOTES_TABLE)
-    .update({
-      note_text: newText,
-      updated_at: new Date().toISOString(),
-      updated_by: userId || null,
-    })
-    .eq("id", noteId)
-    .select("*")
-    .single();
-}
-
-/**
- * Delete a note by id.
- */
-export async function deleteNote(noteId) {
-  return await sb.from(NOTES_TABLE).delete().eq("id", noteId);
-}
-
-/**
- * Returns true if the current session should see the Admin link.
- */
-export async function adminLinkVisible() {
-  const s = await getSession();
-  if (!s) return false;
-  return await isAdminUser();
-}
-
-// ---------------------------
-// Table UI
-// ---------------------------
-
-/**
- * Build the bank numbers table UI (header + table skeleton).
- */
 export function buildNumbersTable({ actions = false, showNotesCol = false, adminHeaderControlsHtml = "" }) {
   const heads = COLUMNS.map(c => `<th>${esc(c.label)}</th>`).join("");
   const notesHead = showNotesCol ? `<th style="width:140px;">Notes</th>` : "";
@@ -399,13 +286,7 @@ export function buildNumbersTable({ actions = false, showNotesCol = false, admin
       </div>
       <div class="tableWrap">
         <table class="table">
-          <thead>
-            <tr>
-              ${heads}
-              ${notesHead}
-              ${actionsHead}
-            </tr>
-          </thead>
+          <thead><tr>${heads}${notesHead}${actionsHead}</tr></thead>
           <tbody id="rows"></tbody>
         </table>
       </div>
@@ -413,10 +294,7 @@ export function buildNumbersTable({ actions = false, showNotesCol = false, admin
   `;
 }
 
-/**
- * Render table rows into the provided root element.
- */
-export function renderNumbersRows(root, list, { actions = false, showNotesCol = false, notesCellHtml, onEdit, onDelete }) {
+export function renderNumbersRows(root, list, { actions = false, showNotesCol = false, notesCellHtml, onEdit, onDelete } = {}) {
   const rowsEl = root.querySelector("#rows");
   const countEl = root.querySelector("#count");
   if (countEl) countEl.textContent = `${list.length} entries`;
@@ -432,122 +310,208 @@ export function renderNumbersRows(root, list, { actions = false, showNotesCol = 
       if (c.type === "bool") {
         return `<td>${v ? "EMS" : "Non-EMS"}</td>`;
       }
-      return `<td>${esc(v ?? "")}</td>`;
+
+      const cls = c.mono ? ` class="mono"` : "";
+      return `<td${cls}>${esc(v ?? "")}</td>`;
     }).join("");
 
-    const notesTd = showNotesCol
-      ? `<td>${notesCellHtml ? notesCellHtml(r) : ""}</td>`
-      : "";
+    const notesTd = showNotesCol ? `<td>${notesCellHtml ? notesCellHtml(r) : ""}</td>` : "";
 
-    const actionsTd = actions
-      ? `
-        <td style="display:flex; gap:8px; flex-wrap:wrap;">
-          <button class="btnRow" type="button" data-edit="${esc(r.id)}">Edit</button>
-          <button class="btnRow btnRowDanger" type="button" data-del="${esc(r.id)}">Delete</button>
-        </td>
-      `
-      : "";
+    const actionTd = actions ? `
+      <td>
+        <button class="btn" type="button" data-edit="${esc(r.id)}">Edit</button>
+        <button class="btn" type="button" data-del="${esc(r.id)}">Delete</button>
+      </td>` : "";
 
-    return `
-      <tr>
-        ${tds}
-        ${notesTd}
-        ${actionsTd}
-      </tr>
-    `;
+    return `<tr>${tds}${notesTd}${actionTd}</tr>`;
   }).join("");
 
-  // Delegate edit/delete handlers
-  rowsEl.querySelectorAll("[data-edit]").forEach(btn => {
-    btn.addEventListener("click", () => onEdit?.(btn.dataset.edit));
-  });
-  rowsEl.querySelectorAll("[data-del]").forEach(btn => {
-    btn.addEventListener("click", () => onDelete?.(btn.dataset.del));
-  });
-
-  // Delegate optional notes handlers
-  rowsEl.querySelectorAll("[data-notes]").forEach(btn => {
-    btn.addEventListener("click", () => root.dispatchEvent(new CustomEvent("openNotes", { detail: btn.dataset.notes })));
-  });
+  if (actions) {
+    rowsEl.querySelectorAll("[data-edit]").forEach(btn =>
+      btn.addEventListener("click", () => onEdit?.(btn.getAttribute("data-edit")))
+    );
+    rowsEl.querySelectorAll("[data-del]").forEach(btn =>
+      btn.addEventListener("click", () => onDelete?.(btn.getAttribute("data-del")))
+    );
+  }
 }
 
 // ---------------------------
-// Public filters UI
+// DB helpers
 // ---------------------------
 
+export async function loadAllRows() {
+  return await sb.from(TABLE).select("*").order("bankname", { ascending: true });
+}
+
 /**
- * Build the filter UI HTML for the public view.
+ * ADMIN: load rows with notes count
+ * Needs FK relation bank_number_notes.bank_number_id -> bank_numbers.id
  */
-export function buildFiltersUI() {
+export async function loadAllRowsWithNotesCount() {
+  const res = await sb
+    .from(TABLE)
+    .select("*, bank_number_notes(count)")
+    .order("bankname", { ascending: true });
+
+  if (res.error) return res;
+
+  const data = (res.data || []).map(r => {
+    const cnt = Array.isArray(r.bank_number_notes) && r.bank_number_notes[0]?.count != null
+      ? Number(r.bank_number_notes[0].count)
+      : 0;
+
+    const out = { ...r, notes_count: cnt };
+    delete out.bank_number_notes;
+    return out;
+  });
+
+  return { data, error: null };
+}
+
+// ---------------------------
+// Notes helpers (CRUD) + compatibility
+// ---------------------------
+
+export function groupNotesByBankId(notes) {
+  const m = new Map();
+  for (const n of notes || []) {
+    const k = n.bank_number_id;
+    if (!m.has(k)) m.set(k, []);
+    m.get(k).push(n);
+  }
+  return m;
+}
+
+// ✅ THIS EXPORT was missing in the broken refactor — needed by numbersView.js
+export async function loadNotesForBankIds(bankIds) {
+  if (!bankIds?.length) return { data: [], error: null };
+
+  return await sb
+    .from(NOTES_TABLE)
+    .select("id, bank_number_id, note_text, created_at, created_by, updated_at, updated_by")
+    .in("bank_number_id", bankIds)
+    .order("created_at", { ascending: false });
+}
+
+export async function loadNotesForBankId(bankId) {
+  return await sb
+    .from(NOTES_TABLE)
+    .select("id, bank_number_id, note_text, created_at, created_by, updated_at, updated_by")
+    .eq("bank_number_id", bankId)
+    .order("created_at", { ascending: false });
+}
+
+export async function addNote(bankNumberId, noteText) {
+  const trimmed = (noteText || "").trim();
+  if (!trimmed) return { data: null, error: { message: "Note is empty." } };
+
+  return await sb.from(NOTES_TABLE).insert({
+    bank_number_id: bankNumberId,
+    note_text: trimmed,
+  });
+}
+
+export async function updateNote(noteId, newText, userId) {
+  const trimmed = (newText || "").trim();
+  if (!trimmed) return { data: null, error: { message: "Note is empty." } };
+
+  return await sb
+    .from(NOTES_TABLE)
+    .update({
+      note_text: trimmed,
+      updated_at: new Date().toISOString(),
+      updated_by: userId || null,
+    })
+    .eq("id", noteId);
+}
+
+export async function deleteNote(noteId) {
+  return await sb.from(NOTES_TABLE).delete().eq("id", noteId);
+}
+
+// ---------------------------
+// Filters UI + wiring (compat for numbersView.js)
+// ---------------------------
+
+export function buildFiltersUI({ showAdminLink = false }) {
+  const filterInputs = COLUMNS
+    .filter(c => c.filter && c.type !== "bool")
+    .map(c => `<input data-filter="${esc(c.key)}" type="text" placeholder="${esc(c.label)}">`)
+    .join("");
+
   return `
     <div class="card" style="border-radius:14px;">
-      <div class="cardHead"><strong>Filters</strong></div>
-      <div class="cardBody" style="gap:12px;">
-        <input class="input" id="search" placeholder="Search..." />
-
-        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-          <label style="display:flex; gap:8px; align-items:center;">
-            <input type="checkbox" id="f_ems" />
-            <span style="color:rgba(255,255,255,.72); font-size:12px;">Only EMS</span>
-          </label>
-
-          <label style="display:flex; gap:8px; align-items:center;">
-            <input type="checkbox" id="f_nonems" />
-            <span style="color:rgba(255,255,255,.72); font-size:12px;">Only Non-EMS</span>
-          </label>
-
-          <select class="input" id="f_country" style="width:220px;">
-            <option value="">All countries</option>
+      <div class="cardHead">
+        <strong>Filters</strong>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <input id="globalSearch" type="text" placeholder="Global search (all fields)" style="width:320px; max-width:70vw;">
+          <select id="f_isems_number" style="width:160px;">
+            <option value="">EMS: Any</option>
+            <option value="true">EMS</option>
+            <option value="false">Non-EMS</option>
           </select>
+          <button class="btn" id="clearBtn" type="button">Clear</button>
+          <a class="btn" id="adminLink" href="./admin.html" style="display:${showAdminLink ? "inline-flex" : "none"};">Admin Editor</a>
+        </div>
+      </div>
+
+      <div class="cardBody">
+        <div class="grid4">
+          ${filterInputs}
         </div>
       </div>
     </div>
   `;
 }
 
-/**
- * Read the current filter UI values and return a filters object.
- */
 export function getFilters(root) {
-  const q = root.querySelector("#search")?.value || "";
-  const onlyEms = root.querySelector("#f_ems")?.checked || false;
-  const onlyNonEms = root.querySelector("#f_nonems")?.checked || false;
-  const country = root.querySelector("#f_country")?.value || "";
-
-  let emsFilter = null;
-  if (onlyEms && !onlyNonEms) emsFilter = true;
-  if (!onlyEms && onlyNonEms) emsFilter = false;
+  const fieldMap = {};
+  COLUMNS.forEach(c => {
+    if (c.filter && c.type !== "bool") {
+      fieldMap[c.key] = root.querySelector(`[data-filter="${CSS.escape(c.key)}"]`);
+    }
+  });
 
   return {
-    q,
-    onlyEms: emsFilter,
-    country: country || "",
+    globalSearch: root.querySelector("#globalSearch"),
+    isems: root.querySelector("#f_isems_number"),
+    clearBtn: root.querySelector("#clearBtn"),
+    fields: fieldMap,
   };
 }
 
-/**
- * Attach filter change handlers.
- */
-export function wireFilters(root, onChange) {
-  ["#search", "#f_ems", "#f_nonems", "#f_country"].forEach(sel => {
-    root.querySelector(sel)?.addEventListener("input", () => onChange?.());
-    root.querySelector(sel)?.addEventListener("change", () => onChange?.());
+// ✅ This is what your error complains about:
+export function wireFilters({ FLT, onChange }) {
+  // inputs
+  Object.values(FLT.fields || {}).forEach(el => el?.addEventListener("input", onChange));
+  // global search
+  FLT.globalSearch?.addEventListener("input", onChange);
+  // EMS select
+  FLT.isems?.addEventListener("change", onChange);
+
+  // clear button
+  FLT.clearBtn?.addEventListener("click", () => {
+    if (FLT.globalSearch) FLT.globalSearch.value = "";
+    if (FLT.isems) FLT.isems.value = "";
+    Object.values(FLT.fields || {}).forEach(el => { if (el) el.value = ""; });
+    onChange();
   });
 }
 
-// ---------------------------
-// Backwards compatible aliases
-// ---------------------------
+// ------------------------------------------------------------------
+// Backwards-compat exports for older numbersView.js / numbersAdmin.js
+// ------------------------------------------------------------------
 
-/**
- * Backwards-compatible alias for buildNumbersTable.
- */
+// Old name -> new function
 export function buildTableUI(opts = {}) {
   // old signature: { actions?: boolean, extraHeaderHtml?: string }
   // our new signature: buildNumbersTable({ actions, showNotesCol, adminHeaderControlsHtml })
   const { actions = false, extraHeaderHtml = "", adminHeaderControlsHtml = "" } = opts;
 
   // If old code used extraHeaderHtml, we emulate by using showNotesCol + manual injection.
+  // We keep it simple: if extraHeaderHtml is non-empty, append it by treating it as "notes column header".
+  // (Your view/admin code can still render the matching extra TDs if it used extraCellHtml.)
   const showNotesCol = !!extraHeaderHtml;
 
   return buildNumbersTable({
@@ -557,10 +521,9 @@ export function buildTableUI(opts = {}) {
   });
 }
 
-/**
- * Backwards-compatible alias for renderNumbersRows.
- */
+// Old name -> new renderer
 export function renderRows(root, list, opts = {}) {
+  // old signature: { actions?, onEdit?, onDelete?, extraCellHtml? }
   const { actions = false, onEdit, onDelete, extraCellHtml } = opts;
 
   // If old code provided extraCellHtml, we treat it as "notes column" cell builder.
@@ -574,3 +537,4 @@ export function renderRows(root, list, opts = {}) {
     onDelete,
   });
 }
+
