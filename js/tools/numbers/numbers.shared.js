@@ -111,55 +111,8 @@ export function renderAccessDenied() {
 }
 
 // ---------------------------
-// Filters UI + logic
+// Filters logic (used in view)
 // ---------------------------
-
-export function buildFiltersUI({ showAdminLink = false }) {
-  const filterInputs = COLUMNS
-    .filter(c => c.filter && c.type !== "bool")
-    .map(c => `<input data-filter="${esc(c.key)}" type="text" placeholder="${esc(c.label)}">`)
-    .join("");
-
-  return `
-    <div class="card" style="border-radius:14px;">
-      <div class="cardHead">
-        <strong>Filters</strong>
-        <div style="display:flex; gap:10px; flex-wrap:wrap;">
-          <input id="globalSearch" type="text" placeholder="Global search (all fields)" style="width:320px; max-width:70vw;">
-          <select id="f_isems_number" style="width:160px;">
-            <option value="">EMS: Any</option>
-            <option value="true">EMS</option>
-            <option value="false">Non-EMS</option>
-          </select>
-          <button class="btn" id="clearBtn" type="button">Clear</button>
-          <a class="btn" id="adminLink" href="./admin.html" style="display:${showAdminLink ? "inline-flex" : "none"};">Admin Editor</a>
-        </div>
-      </div>
-
-      <div class="cardBody">
-        <div class="grid4">
-          ${filterInputs}
-        </div>
-      </div>
-    </div>
-  `;
-}
-
-export function getFilters(root) {
-  const fieldMap = {};
-  COLUMNS.forEach(c => {
-    if (c.filter && c.type !== "bool") {
-      fieldMap[c.key] = root.querySelector(`[data-filter="${CSS.escape(c.key)}"]`);
-    }
-  });
-
-  return {
-    globalSearch: root.querySelector("#globalSearch"),
-    isems: root.querySelector("#f_isems_number"),
-    fields: fieldMap,
-    clearBtn: root.querySelector("#clearBtn"),
-  };
-}
 
 export function haystack(row) {
   return COLUMNS.map(c => {
@@ -185,83 +138,6 @@ export function passesFilters(row, FLT) {
 
   if (qGlobal && !haystack(row).includes(qGlobal)) return false;
   return true;
-}
-
-export function wireFilters({ FLT, onChange }) {
-  Object.values(FLT.fields).forEach(el => el?.addEventListener("input", onChange));
-  FLT.globalSearch?.addEventListener("input", onChange);
-  FLT.isems?.addEventListener("change", onChange);
-
-  FLT.clearBtn?.addEventListener("click", () => {
-    if (FLT.globalSearch) FLT.globalSearch.value = "";
-    if (FLT.isems) FLT.isems.value = "";
-    Object.values(FLT.fields).forEach(el => { if (el) el.value = ""; });
-    onChange();
-  });
-}
-
-// ---------------------------
-// Table UI + rendering
-// ---------------------------
-
-export function buildTableUI({ actions = false, extraHeaderHtml = "" }) {
-  const heads = COLUMNS.map(c => `<th>${esc(c.label)}</th>`).join("");
-  const actionsHead = actions ? `<th style="width:170px;">Actions</th>` : "";
-  const searchBox = actions ? `<input id="search" type="text" placeholder="Search..." style="width:300px; max-width:60vw;">` : "";
-
-  return `
-    <div class="card" style="border-radius:14px; overflow:hidden;">
-      <div class="cardHead">
-        <strong>List</strong>
-        <span id="count" style="color:rgba(255,255,255,.68); font-size:12px;"></span>
-        ${searchBox}
-      </div>
-      <div class="tableWrap">
-        <table class="table">
-          <thead><tr>${heads}${extraHeaderHtml}${actionsHead}</tr></thead>
-          <tbody id="rows"></tbody>
-        </table>
-      </div>
-    </div>
-  `;
-}
-
-export function renderRows(root, list, { actions = false, onEdit, onDelete, extraCellHtml } = {}) {
-  const rowsEl = root.querySelector("#rows");
-  const countEl = root.querySelector("#count");
-  if (countEl) countEl.textContent = `${list.length} entries`;
-  if (!rowsEl) return;
-
-  rowsEl.innerHTML = list.map(r => {
-    const tds = COLUMNS.map(c => {
-      const v = r[c.key];
-
-      if (c.type === "url") {
-        return `<td>${v ? `<a href="${esc(v)}" target="_blank" rel="noopener noreferrer">${esc(v)}</a>` : ""}</td>`;
-      }
-      if (c.type === "bool") {
-        return `<td>${v ? "EMS" : "Non-EMS"}</td>`;
-      }
-
-      const cls = c.mono ? ` class="mono"` : "";
-      return `<td${cls}>${esc(v ?? "")}</td>`;
-    }).join("");
-
-    const extraTd = extraCellHtml ? `<td>${extraCellHtml(r)}</td>` : "";
-
-    const actionTd = actions ? `
-      <td>
-        <button class="btn" type="button" data-edit="${esc(r.id)}">Edit</button>
-        <button class="btn" type="button" data-del="${esc(r.id)}">Delete</button>
-      </td>` : "";
-
-    return `<tr>${tds}${extraTd}${actionTd}</tr>`;
-  }).join("");
-
-  if (actions) {
-    rowsEl.querySelectorAll("[data-edit]").forEach(btn => btn.addEventListener("click", () => onEdit?.(btn.getAttribute("data-edit"))));
-    rowsEl.querySelectorAll("[data-del]").forEach(btn => btn.addEventListener("click", () => onDelete?.(btn.getAttribute("data-del"))));
-  }
 }
 
 // ---------------------------
@@ -393,6 +269,74 @@ export function validatePayload(payload, { isValidUrlMaybe }) {
 }
 
 // ---------------------------
+// Table helpers (simple, stable)
+// ---------------------------
+
+export function buildNumbersTable({ actions = false, showNotesCol = false, adminHeaderControlsHtml = "" }) {
+  const heads = COLUMNS.map(c => `<th>${esc(c.label)}</th>`).join("");
+  const notesHead = showNotesCol ? `<th style="width:140px;">Notes</th>` : "";
+  const actionsHead = actions ? `<th style="width:170px;">Actions</th>` : "";
+
+  return `
+    <div class="card" style="border-radius:14px; overflow:hidden;">
+      <div class="cardHead">
+        <strong>List</strong>
+        <span id="count" style="color:rgba(255,255,255,.68); font-size:12px;"></span>
+        ${adminHeaderControlsHtml}
+      </div>
+      <div class="tableWrap">
+        <table class="table">
+          <thead><tr>${heads}${notesHead}${actionsHead}</tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+export function renderNumbersRows(root, list, { actions = false, showNotesCol = false, notesCellHtml, onEdit, onDelete } = {}) {
+  const rowsEl = root.querySelector("#rows");
+  const countEl = root.querySelector("#count");
+  if (countEl) countEl.textContent = `${list.length} entries`;
+  if (!rowsEl) return;
+
+  rowsEl.innerHTML = list.map(r => {
+    const tds = COLUMNS.map(c => {
+      const v = r[c.key];
+
+      if (c.type === "url") {
+        return `<td>${v ? `<a href="${esc(v)}" target="_blank" rel="noopener noreferrer">${esc(v)}</a>` : ""}</td>`;
+      }
+      if (c.type === "bool") {
+        return `<td>${v ? "EMS" : "Non-EMS"}</td>`;
+      }
+
+      const cls = c.mono ? ` class="mono"` : "";
+      return `<td${cls}>${esc(v ?? "")}</td>`;
+    }).join("");
+
+    const notesTd = showNotesCol ? `<td>${notesCellHtml ? notesCellHtml(r) : ""}</td>` : "";
+
+    const actionTd = actions ? `
+      <td>
+        <button class="btn" type="button" data-edit="${esc(r.id)}">Edit</button>
+        <button class="btn" type="button" data-del="${esc(r.id)}">Delete</button>
+      </td>` : "";
+
+    return `<tr>${tds}${notesTd}${actionTd}</tr>`;
+  }).join("");
+
+  if (actions) {
+    rowsEl.querySelectorAll("[data-edit]").forEach(btn =>
+      btn.addEventListener("click", () => onEdit?.(btn.getAttribute("data-edit")))
+    );
+    rowsEl.querySelectorAll("[data-del]").forEach(btn =>
+      btn.addEventListener("click", () => onDelete?.(btn.getAttribute("data-del")))
+    );
+  }
+}
+
+// ---------------------------
 // DB helpers
 // ---------------------------
 
@@ -402,7 +346,7 @@ export async function loadAllRows() {
 
 /**
  * ADMIN: load rows with notes count
- * Requires FK relationship: bank_number_notes.bank_number_id -> bank_numbers.id
+ * Needs FK relation bank_number_notes.bank_number_id -> bank_numbers.id
  */
 export async function loadAllRowsWithNotesCount() {
   const res = await sb
@@ -417,7 +361,6 @@ export async function loadAllRowsWithNotesCount() {
       ? Number(r.bank_number_notes[0].count)
       : 0;
 
-    // flatten
     const out = { ...r, notes_count: cnt };
     delete out.bank_number_notes;
     return out;
@@ -427,8 +370,29 @@ export async function loadAllRowsWithNotesCount() {
 }
 
 // ---------------------------
-// Notes helpers (CRUD)
+// Notes helpers (CRUD) + compatibility
 // ---------------------------
+
+export function groupNotesByBankId(notes) {
+  const m = new Map();
+  for (const n of notes || []) {
+    const k = n.bank_number_id;
+    if (!m.has(k)) m.set(k, []);
+    m.get(k).push(n);
+  }
+  return m;
+}
+
+// ✅ THIS EXPORT was missing in the broken refactor — needed by numbersView.js
+export async function loadNotesForBankIds(bankIds) {
+  if (!bankIds?.length) return { data: [], error: null };
+
+  return await sb
+    .from(NOTES_TABLE)
+    .select("id, bank_number_id, note_text, created_at, created_by, updated_at, updated_by")
+    .in("bank_number_id", bankIds)
+    .order("created_at", { ascending: false });
+}
 
 export async function loadNotesForBankId(bankId) {
   return await sb
