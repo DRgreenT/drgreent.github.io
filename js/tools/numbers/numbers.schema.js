@@ -29,4 +29,7 @@ export const COLUMNS = [
 
   { key: "blz_number", label: "BLZ", type: "text", filter: true, form: true, group: 5 },
   { key: "bin_number", label: "BIN", type: "text", filter: true, form: true, group: 5 },
+
+  // NEW:
+  { key: "info", label: "Info", type: "text", filter: true, form: true, group: 6 },
 ];

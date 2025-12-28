@@ -401,7 +401,7 @@ export async function loadAllRows() {
 }
 
 // ---------------------------
-// Notes helpers
+// Notes helpers (CRUD)
 // ---------------------------
 
 export function groupNotesByBankId(notes) {
@@ -417,13 +417,19 @@ export function groupNotesByBankId(notes) {
 export async function loadNotesForBankIds(bankIds) {
   if (!bankIds?.length) return { data: [], error: null };
 
-  const res = await sb
+  return await sb
     .from(NOTES_TABLE)
-    .select("id, bank_number_id, note_text, created_at, created_by")
+    .select("id, bank_number_id, note_text, created_at, created_by, updated_at, updated_by")
     .in("bank_number_id", bankIds)
     .order("created_at", { ascending: false });
+}
 
-  return res;
+export async function loadNotesForBankId(bankId) {
+  return await sb
+    .from(NOTES_TABLE)
+    .select("id, bank_number_id, note_text, created_at, created_by, updated_at, updated_by")
+    .eq("bank_number_id", bankId)
+    .order("created_at", { ascending: false });
 }
 
 export async function addNote(bankNumberId, noteText) {
@@ -436,7 +442,21 @@ export async function addNote(bankNumberId, noteText) {
   });
 }
 
+export async function updateNote(noteId, newText, userId) {
+  const trimmed = (newText || "").trim();
+  if (!trimmed) return { data: null, error: { message: "Note is empty." } };
+
+  return await sb
+    .from(NOTES_TABLE)
+    .update({
+      note_text: trimmed,
+      updated_at: new Date().toISOString(),
+      updated_by: userId || null,
+    })
+    .eq("id", noteId);
+}
+
 export async function deleteNote(noteId) {
-  // RLS: only admins can delete
+  // RLS: creator or admin
   return await sb.from(NOTES_TABLE).delete().eq("id", noteId);
 }
