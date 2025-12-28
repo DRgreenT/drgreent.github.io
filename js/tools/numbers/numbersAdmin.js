@@ -16,7 +16,6 @@ import {
   renderRows,
   haystack,
 } from "./numbers.shared.js";
-
 import { TABLE } from "./numbers.schema.js";
 
 export async function renderNumbersAdmin(adminRoot) {
@@ -66,8 +65,6 @@ export async function renderNumbersAdmin(adminRoot) {
     saveMsg.textContent = "";
 
     const payload = payloadFromForm(refs);
-
-    // metadata columns (optional in your DB)
     payload.updated_by = session2.user.id;
     payload.updated_at = new Date().toISOString();
 

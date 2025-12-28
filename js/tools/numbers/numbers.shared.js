@@ -1,7 +1,7 @@
 import { sb, getSession } from "../../lib/supabaseClient.js";
 import { esc, includesCI } from "../../lib/utils.js";
 import { signIn, signUp, signOut, isAdminUser } from "../../lib/auth.js";
-import { TABLE, COLUMNS } from "./numbers.schema.js";
+import { TABLE, COLUMNS, NOTES_TABLE } from "./numbers.schema.js";
 
 // ---------------------------
 // Shell + Auth
@@ -41,10 +41,6 @@ export function renderShell({ title, subtitle, session }) {
   `;
 }
 
-/**
- * Wires login/signup/logout for a rendered shell.
- * Returns: { refreshBtn }
- */
 export async function wireAuth({ root, onAuthedRerender, signupHint }) {
   const authMsg = root.querySelector("#authMsg");
   const loginBtn = root.querySelector("#loginBtn");
@@ -69,9 +65,9 @@ export async function wireAuth({ root, onAuthedRerender, signupHint }) {
       const email = root.querySelector("#email")?.value?.trim() || "";
       const password = root.querySelector("#password")?.value || "";
       const { error } = await signUp(email, password);
-
-      if (error) authMsg.textContent = error.message;
-      else authMsg.textContent = signupHint || "Signed up. If email confirmation is enabled, check your inbox.";
+      authMsg.textContent = error
+        ? error.message
+        : (signupHint || "Signed up. If email confirmation is enabled, check your inbox.");
     });
   }
 
@@ -95,11 +91,6 @@ export async function adminLinkVisible() {
   return await isAdminUser();
 }
 
-export async function requireSession() {
-  const s = await getSession();
-  return s || null;
-}
-
 export async function requireAdmin() {
   const s = await getSession();
   if (!s) return { session: null, isAdmin: false };
@@ -120,7 +111,7 @@ export function renderAccessDenied() {
 }
 
 // ---------------------------
-// Filters UI + logic (shared)
+// Filters UI + logic
 // ---------------------------
 
 export function buildFiltersUI({ showAdminLink = false }) {
@@ -196,7 +187,7 @@ export function passesFilters(row, FLT) {
   return true;
 }
 
-export function wireFilters({ root, FLT, onChange }) {
+export function wireFilters({ FLT, onChange }) {
   Object.values(FLT.fields).forEach(el => el?.addEventListener("input", onChange));
   FLT.globalSearch?.addEventListener("input", onChange);
   FLT.isems?.addEventListener("change", onChange);
@@ -213,7 +204,7 @@ export function wireFilters({ root, FLT, onChange }) {
 // Table UI + rendering
 // ---------------------------
 
-export function buildTableUI({ actions = false }) {
+export function buildTableUI({ actions = false, extraHeaderHtml = "" }) {
   const heads = COLUMNS.map(c => `<th>${esc(c.label)}</th>`).join("");
   const actionsHead = actions ? `<th style="width:170px;">Actions</th>` : "";
   const searchBox = actions ? `<input id="search" type="text" placeholder="Search..." style="width:300px; max-width:60vw;">` : "";
@@ -227,7 +218,7 @@ export function buildTableUI({ actions = false }) {
       </div>
       <div class="tableWrap">
         <table class="table">
-          <thead><tr>${heads}${actionsHead}</tr></thead>
+          <thead><tr>${heads}${extraHeaderHtml}${actionsHead}</tr></thead>
           <tbody id="rows"></tbody>
         </table>
       </div>
@@ -235,7 +226,7 @@ export function buildTableUI({ actions = false }) {
   `;
 }
 
-export function renderRows(root, list, { actions = false, onEdit, onDelete } = {}) {
+export function renderRows(root, list, { actions = false, onEdit, onDelete, extraCellHtml } = {}) {
   const rowsEl = root.querySelector("#rows");
   const countEl = root.querySelector("#count");
   if (countEl) countEl.textContent = `${list.length} entries`;
@@ -256,22 +247,20 @@ export function renderRows(root, list, { actions = false, onEdit, onDelete } = {
       return `<td${cls}>${esc(v ?? "")}</td>`;
     }).join("");
 
+    const extraTd = extraCellHtml ? `<td>${extraCellHtml(r)}</td>` : "";
+
     const actionTd = actions ? `
       <td>
         <button class="btn" type="button" data-edit="${esc(r.id)}">Edit</button>
         <button class="btn" type="button" data-del="${esc(r.id)}">Delete</button>
       </td>` : "";
 
-    return `<tr>${tds}${actionTd}</tr>`;
+    return `<tr>${tds}${extraTd}${actionTd}</tr>`;
   }).join("");
 
   if (actions) {
-    rowsEl.querySelectorAll("[data-edit]").forEach(btn => {
-      btn.addEventListener("click", () => onEdit?.(btn.getAttribute("data-edit")));
-    });
-    rowsEl.querySelectorAll("[data-del]").forEach(btn => {
-      btn.addEventListener("click", () => onDelete?.(btn.getAttribute("data-del")));
-    });
+    rowsEl.querySelectorAll("[data-edit]").forEach(btn => btn.addEventListener("click", () => onEdit?.(btn.getAttribute("data-edit"))));
+    rowsEl.querySelectorAll("[data-del]").forEach(btn => btn.addEventListener("click", () => onDelete?.(btn.getAttribute("data-del"))));
   }
 }
 
@@ -409,4 +398,45 @@ export function validatePayload(payload, { isValidUrlMaybe }) {
 
 export async function loadAllRows() {
   return await sb.from(TABLE).select("*").order("bankname", { ascending: true });
+}
+
+// ---------------------------
+// Notes helpers
+// ---------------------------
+
+export function groupNotesByBankId(notes) {
+  const m = new Map();
+  for (const n of notes || []) {
+    const k = n.bank_number_id;
+    if (!m.has(k)) m.set(k, []);
+    m.get(k).push(n);
+  }
+  return m;
+}
+
+export async function loadNotesForBankIds(bankIds) {
+  if (!bankIds?.length) return { data: [], error: null };
+
+  const res = await sb
+    .from(NOTES_TABLE)
+    .select("id, bank_number_id, note_text, created_at, created_by")
+    .in("bank_number_id", bankIds)
+    .order("created_at", { ascending: false });
+
+  return res;
+}
+
+export async function addNote(bankNumberId, noteText) {
+  const trimmed = (noteText || "").trim();
+  if (!trimmed) return { data: null, error: { message: "Note is empty." } };
+
+  return await sb.from(NOTES_TABLE).insert({
+    bank_number_id: bankNumberId,
+    note_text: trimmed,
+  });
+}
+
+export async function deleteNote(noteId) {
+  // RLS: only admins can delete
+  return await sb.from(NOTES_TABLE).delete().eq("id", noteId);
 }

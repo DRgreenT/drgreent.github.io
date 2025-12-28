@@ -1,22 +1,13 @@
-// Single source of truth for the Numbers tool (table, columns, filters, form layout)
+// Single source of truth for the Numbers tool
 
 export const TABLE = "bank_numbers";
+export const NOTES_TABLE = "bank_number_notes";
 
 /**
  * COLUMNS drives:
  * - table headers + cell rendering
  * - filter inputs
  * - admin form inputs + payload mapping
- *
- * Supported props:
- * key: DB column name
- * label: UI label
- * type: "text" | "url" | "bool"
- * filter: boolean (show as filter input)
- * form: boolean (show in admin form)
- * required: boolean (admin validation)
- * mono: boolean (render value in mono font)
- * group: number (admin form grouping/layout)
  */
 export const COLUMNS = [
   { key: "bank_country", label: "Bank Country", type: "text", filter: true, form: true, group: 1 },
