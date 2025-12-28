@@ -1,5 +1,5 @@
 import { sb, getSession } from "../lib/supabaseClient.js";
-import { esc, isValidUrlMaybe, copyToClipboard } from "../lib/utils.js";
+import { esc, isValidUrlMaybe } from "../lib/utils.js";
 import { signIn, signUp, signOut, isAdminUser } from "../lib/auth.js";
 
 const TABLE = "bank_numbers";
@@ -108,7 +108,8 @@ export async function renderNumbersAdmin(adminRoot) {
       </div>
 
       <div class="cardBody" style="gap:10px;">
-        <div class="grid3">
+        <div class="grid4">
+          <input id="bank_country" type="text" placeholder="Bank country">
           <input id="bankname" type="text" placeholder="Bankname *">
           <input id="bankwebsite" type="text" placeholder="Bank website (https://...)">
           <input id="location_name" type="text" placeholder="Location name">
@@ -135,10 +136,9 @@ export async function renderNumbersAdmin(adminRoot) {
           <input id="bic_number" type="text" placeholder="BIC number">
         </div>
 
-        <div class="grid3">
+        <div class="grid2">
           <input id="blz_number" type="text" placeholder="BLZ number">
           <input id="bin_number" type="text" placeholder="BIN number">
-          <button class="btn" id="copyPhoneBtn" type="button">Copy phone</button>
         </div>
 
         <div id="saveMsg" style="color:rgba(255,255,255,.68); font-size:12px;"></div>
@@ -154,6 +154,7 @@ export async function renderNumbersAdmin(adminRoot) {
         <table class="table">
           <thead>
             <tr>
+              <th>Bank Country</th>
               <th>Bankname</th>
               <th>Bank website</th>
               <th>Location</th>
@@ -182,6 +183,7 @@ export async function renderNumbersAdmin(adminRoot) {
   const rowsEl = document.getElementById("rows");
 
   const F = {
+    bank_country: document.getElementById("bank_country"),
     bankname: document.getElementById("bankname"),
     bankwebsite: document.getElementById("bankwebsite"),
     location_name: document.getElementById("location_name"),
@@ -203,14 +205,11 @@ export async function renderNumbersAdmin(adminRoot) {
 
   document.getElementById("newBtn").addEventListener("click", clearForm);
 
-  document.getElementById("copyPhoneBtn").addEventListener("click", async () => {
-    await copyToClipboard(F.phone_number.value.trim());
-  });
-
   document.getElementById("saveBtn").addEventListener("click", async () => {
     saveMsg.textContent = "";
 
     const payload = {
+      bank_country: F.bank_country.value.trim() || null,
       bankname: F.bankname.value.trim(),
       bankwebsite: F.bankwebsite.value.trim() || null,
       location_name: F.location_name.value.trim() || null,
@@ -267,6 +266,7 @@ export async function renderNumbersAdmin(adminRoot) {
 
   function haystack(r) {
     return [
+      r.bank_country,
       r.bankname, r.bankwebsite, r.location_name,
       r.isems_number ? "ems" : "non-ems",
       r.phone_number, r.cardtype, r.service_provider_name,
@@ -282,6 +282,7 @@ export async function renderNumbersAdmin(adminRoot) {
 
     rowsEl.innerHTML = list.map(r => `
       <tr>
+        <td>${esc(r.bank_country || "")}</td>
         <td>${esc(r.bankname)}</td>
         <td>${r.bankwebsite ? `<a href="${esc(r.bankwebsite)}" target="_blank" rel="noopener noreferrer">${esc(r.bankwebsite)}</a>` : ""}</td>
         <td>${esc(r.location_name || "")}</td>
@@ -310,6 +311,7 @@ export async function renderNumbersAdmin(adminRoot) {
         if (!item) return;
 
         editId = id;
+        F.bank_country.value = item.bank_country || "";
         F.bankname.value = item.bankname || "";
         F.bankwebsite.value = item.bankwebsite || "";
         F.location_name.value = item.location_name || "";
