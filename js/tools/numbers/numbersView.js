@@ -10,7 +10,7 @@ import {
   loadAllRows,
   renderRows,
   adminLinkVisible,
-} from "./numbers/numbers.shared.js";
+} from "./numbers.shared.js";
 
 export async function renderNumbersView(viewRoot) {
   const session = await getSession();

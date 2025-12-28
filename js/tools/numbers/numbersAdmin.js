@@ -15,9 +15,9 @@ import {
   loadAllRows,
   renderRows,
   haystack,
-} from "./numbers/numbers.shared.js";
+} from "./numbers.shared.js";
 
-import { TABLE } from "./numbers/numbers.schema.js";
+import { TABLE } from "./numbers.schema.js";
 
 export async function renderNumbersAdmin(adminRoot) {
   const session = await getSession();

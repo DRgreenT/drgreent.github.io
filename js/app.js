@@ -1,5 +1,5 @@
 import { renderHighlightIt } from "./tools/highlightit.js";
-import { renderNumbersView } from "./tools/numbersView.js";
+import { renderNumbersView } from "./tools/numbers/numbersView.js";
 
 const viewRoot = document.getElementById("viewRoot");
 const navButtons = [...document.querySelectorAll(".navItem")];
