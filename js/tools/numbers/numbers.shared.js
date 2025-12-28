@@ -498,3 +498,43 @@ export function wireFilters({ FLT, onChange }) {
     onChange();
   });
 }
+
+// ------------------------------------------------------------------
+// Backwards-compat exports for older numbersView.js / numbersAdmin.js
+// ------------------------------------------------------------------
+
+// Old name -> new function
+export function buildTableUI(opts = {}) {
+  // old signature: { actions?: boolean, extraHeaderHtml?: string }
+  // our new signature: buildNumbersTable({ actions, showNotesCol, adminHeaderControlsHtml })
+  const { actions = false, extraHeaderHtml = "", adminHeaderControlsHtml = "" } = opts;
+
+  // If old code used extraHeaderHtml, we emulate by using showNotesCol + manual injection.
+  // We keep it simple: if extraHeaderHtml is non-empty, append it by treating it as "notes column header".
+  // (Your view/admin code can still render the matching extra TDs if it used extraCellHtml.)
+  const showNotesCol = !!extraHeaderHtml;
+
+  return buildNumbersTable({
+    actions,
+    showNotesCol,
+    adminHeaderControlsHtml,
+  });
+}
+
+// Old name -> new renderer
+export function renderRows(root, list, opts = {}) {
+  // old signature: { actions?, onEdit?, onDelete?, extraCellHtml? }
+  const { actions = false, onEdit, onDelete, extraCellHtml } = opts;
+
+  // If old code provided extraCellHtml, we treat it as "notes column" cell builder.
+  const showNotesCol = typeof extraCellHtml === "function";
+
+  return renderNumbersRows(root, list, {
+    actions,
+    showNotesCol,
+    notesCellHtml: extraCellHtml,
+    onEdit,
+    onDelete,
+  });
+}
+
