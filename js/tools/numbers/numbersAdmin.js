@@ -12,9 +12,9 @@ import {
   fillForm,
   payloadFromForm,
   validatePayload,
-  loadAllRows,
   renderRows,
   haystack,
+  loadAllRowsWithNotesCount,
   loadNotesForBankId,
   addNote,
   updateNote,
@@ -49,12 +49,13 @@ export async function renderNumbersAdmin(adminRoot) {
   bodyRoot.innerHTML = `
     ${buildAdminFormUI()}
     ${notesAdminPanelHtml()}
-    ${buildTableUI({ actions: true })}
+    ${adminTableHtml()}
     ${notesAdminCss()}
   `;
 
   const saveMsg = adminRoot.querySelector("#saveMsg");
   const searchEl = adminRoot.querySelector("#search");
+  const hasNotesEl = adminRoot.querySelector("#f_has_notes");
   const notesBox = adminRoot.querySelector("#notesBox");
 
   const refs = getFormRefs(adminRoot);
@@ -91,77 +92,26 @@ export async function renderNumbersAdmin(adminRoot) {
       return;
     }
 
-    // if it was a new record, grab new id
-    if (!editId) {
-      editId = res.data?.id || null;
-      if (editId) setNotesVisible(true);
-    }
+    if (!editId) editId = res.data?.id || null;
 
     await load();
     saveMsg.textContent = "Saved.";
     setTimeout(() => (saveMsg.textContent = ""), 1200);
+
+    if (editId) {
+      setNotesVisible(true);
+      await loadNotesPanel();
+    }
   });
 
-  function currentList() {
-    const q = (searchEl?.value || "").trim().toLowerCase();
-    return !q ? allRows : allRows.filter((r) => haystack(r).includes(q));
-  }
-
-  function render() {
-    renderRows(adminRoot, currentList(), {
-      actions: true,
-      onEdit: async (id) => {
-        const item = allRows.find((x) => x.id === id);
-        if (!item) return;
-
-        editId = id;
-        fillForm(refs, item);
-        saveMsg.textContent = "";
-
-        setNotesVisible(true);
-        await loadNotesPanel();
-      },
-      onDelete: async (id) => {
-        const item = allRows.find((x) => x.id === id);
-        if (!item) return;
-
-        if (!confirm(`Delete "${item.bankname}" (${item.phone_number})?`)) return;
-
-        const res = await sb.from(TABLE).delete().eq("id", id);
-        if (res.error) {
-          alert(res.error.message);
-          return;
-        }
-
-        if (editId === id) {
-          editId = null;
-          setNotesVisible(false);
-          clearForm(refs);
-        }
-
-        await load();
-      },
-    });
-  }
-
-  async function load() {
-    const res = await loadAllRows();
-    if (res.error) return alert(res.error.message);
-    allRows = res.data || [];
-    render();
-  }
-
-  searchEl?.addEventListener("input", render);
-  refreshBtn?.addEventListener("click", load);
-
-  // Notes Panel wiring
+  // Notes panel: add
   adminRoot.querySelector("#noteAddBtn")?.addEventListener("click", async () => {
     const msg = adminRoot.querySelector("#noteMsg");
     const ta = adminRoot.querySelector("#noteText");
     msg.textContent = "";
 
     if (!editId) {
-      msg.textContent = "Select an entry first (Edit).";
+      msg.textContent = "Select an entry first (Edit or Notes button).";
       return;
     }
 
@@ -181,8 +131,100 @@ export async function renderNumbersAdmin(adminRoot) {
     ta.value = "";
     msg.textContent = "Saved.";
     await loadNotesPanel();
+    await load(); // refresh notes_count in table
   });
 
+  // ---------- table filtering ----------
+  function currentList() {
+    const q = (searchEl?.value || "").trim().toLowerCase();
+    const hasNotes = (hasNotesEl?.value || "").trim(); // "", "with", "without"
+
+    let list = allRows;
+
+    if (hasNotes === "with") list = list.filter(r => (r.notes_count || 0) > 0);
+    if (hasNotes === "without") list = list.filter(r => (r.notes_count || 0) === 0);
+
+    if (!q) return list;
+    return list.filter(r => haystack(r).includes(q));
+  }
+
+  function render() {
+    const list = currentList();
+
+    renderRows(adminRoot, list, {
+      actions: true,
+      extraCellHtml: (r) => {
+        const cnt = r.notes_count || 0;
+        return `
+          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+            <span class="mono">${cnt}</span>
+            <button class="btn" type="button" data-notes="${esc(r.id)}">Notes</button>
+          </div>
+        `;
+      },
+      onEdit: async (id) => {
+        await startEdit(id);
+      },
+      onDelete: async (id) => {
+        const item = allRows.find(x => x.id === id);
+        if (!item) return;
+
+        if (!confirm(`Delete "${item.bankname}" (${item.phone_number})?`)) return;
+
+        const res = await sb.from(TABLE).delete().eq("id", id);
+        if (res.error) {
+          alert(res.error.message);
+          return;
+        }
+
+        if (editId === id) {
+          editId = null;
+          setNotesVisible(false);
+          clearForm(refs);
+        }
+
+        await load();
+      },
+    });
+
+    // Wire Notes button in table
+    const rowsEl = adminRoot.querySelector("#rows");
+    rowsEl?.querySelectorAll("[data-notes]").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const id = btn.getAttribute("data-notes");
+        await startEdit(id, { openNotes: true });
+      });
+    });
+  }
+
+  async function startEdit(id, opts = {}) {
+    const item = allRows.find(x => x.id === id);
+    if (!item) return;
+
+    editId = id;
+    fillForm(refs, item);
+    saveMsg.textContent = "";
+
+    setNotesVisible(true);
+    await loadNotesPanel();
+
+    if (opts.openNotes) {
+      notesBox.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }
+
+  async function load() {
+    const res = await loadAllRowsWithNotesCount();
+    if (res.error) return alert(res.error.message);
+    allRows = res.data || [];
+    render();
+  }
+
+  searchEl?.addEventListener("input", render);
+  hasNotesEl?.addEventListener("change", render);
+  refreshBtn?.addEventListener("click", load);
+
+  // ---------- Notes panel ----------
   function setNotesVisible(visible) {
     notesBox.style.display = visible ? "block" : "none";
     if (!visible) {
@@ -294,9 +336,70 @@ export async function renderNumbersAdmin(adminRoot) {
         }
         msgEl.textContent = "Deleted.";
         await loadNotesPanel();
+        await load(); // refresh notes_count in table
       });
     });
   }
+
+  // ---------- HTML helpers ----------
+  function adminTableHtml() {
+    return `
+      <div class="card" style="border-radius:14px; overflow:hidden;">
+        <div class="cardHead">
+          <strong>List</strong>
+          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+            <input id="search" type="text" placeholder="Search..." style="width:300px; max-width:60vw;">
+            <select id="f_has_notes" style="width:170px;">
+              <option value="">Has notes: Any</option>
+              <option value="with">With notes</option>
+              <option value="without">Without notes</option>
+            </select>
+          </div>
+        </div>
+        <div class="tableWrap">
+          <table class="table">
+            <thead>
+              <tr>
+                ${/* normal columns from schema */""}
+                ${/* buildTableUI would do this, but we need the extra header here too */""}
+                ${/* we reuse buildTableUI for body rendering; header must match */""}
+                ${/* We'll generate headers identical to renderRows() */""}
+                ${/* COLUMNS headers */""}
+                ${(() => {
+                  // Inline generate header: same order as COLUMNS
+                  const heads = (window.__NUMBERS_SCHEMA_HEADERS__ ||= null);
+                  return "";
+                })()}
+              </tr>
+            </thead>
+          </table>
+        </div>
+      </div>
+    `;
+  }
+
+  // Instead of reinventing headers, we use the existing buildTableUI output
+  // and just inject our extra Notes header.
+  bodyRoot.querySelectorAll(".card").forEach(() => {});
+  const tableWrap = bodyRoot.querySelectorAll(".card")[2];
+
+  // Replace that placeholder with the real shared table HTML including extra header
+  tableWrap.outerHTML = buildTableUI({ actions: true, extraHeaderHtml: `<th style="width:140px;">Notes</th>` });
+
+  // Now add our admin search + has_notes controls into the table header (the generated one)
+  const cardHead = bodyRoot.querySelectorAll(".card .cardHead")[2];
+  cardHead.innerHTML = `
+    <strong>List</strong>
+    <span id="count" style="color:rgba(255,255,255,.68); font-size:12px;"></span>
+    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+      <input id="search" type="text" placeholder="Search..." style="width:300px; max-width:60vw;">
+      <select id="f_has_notes" style="width:170px;">
+        <option value="">Has notes: Any</option>
+        <option value="with">With notes</option>
+        <option value="without">Without notes</option>
+      </select>
+    </div>
+  `;
 
   function notesAdminPanelHtml() {
     return `
@@ -305,7 +408,7 @@ export async function renderNumbersAdmin(adminRoot) {
           <div class="cardHead">
             <strong>Notes (Admin)</strong>
             <span style="color:rgba(255,255,255,.68); font-size:12px;">
-              Select an entry (Edit) to manage notes.
+              Select an entry (Edit or Notes button) to manage notes.
             </span>
           </div>
 

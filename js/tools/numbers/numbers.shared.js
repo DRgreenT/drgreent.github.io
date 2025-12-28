@@ -400,29 +400,35 @@ export async function loadAllRows() {
   return await sb.from(TABLE).select("*").order("bankname", { ascending: true });
 }
 
+/**
+ * ADMIN: load rows with notes count
+ * Requires FK relationship: bank_number_notes.bank_number_id -> bank_numbers.id
+ */
+export async function loadAllRowsWithNotesCount() {
+  const res = await sb
+    .from(TABLE)
+    .select("*, bank_number_notes(count)")
+    .order("bankname", { ascending: true });
+
+  if (res.error) return res;
+
+  const data = (res.data || []).map(r => {
+    const cnt = Array.isArray(r.bank_number_notes) && r.bank_number_notes[0]?.count != null
+      ? Number(r.bank_number_notes[0].count)
+      : 0;
+
+    // flatten
+    const out = { ...r, notes_count: cnt };
+    delete out.bank_number_notes;
+    return out;
+  });
+
+  return { data, error: null };
+}
+
 // ---------------------------
 // Notes helpers (CRUD)
 // ---------------------------
-
-export function groupNotesByBankId(notes) {
-  const m = new Map();
-  for (const n of notes || []) {
-    const k = n.bank_number_id;
-    if (!m.has(k)) m.set(k, []);
-    m.get(k).push(n);
-  }
-  return m;
-}
-
-export async function loadNotesForBankIds(bankIds) {
-  if (!bankIds?.length) return { data: [], error: null };
-
-  return await sb
-    .from(NOTES_TABLE)
-    .select("id, bank_number_id, note_text, created_at, created_by, updated_at, updated_by")
-    .in("bank_number_id", bankIds)
-    .order("created_at", { ascending: false });
-}
 
 export async function loadNotesForBankId(bankId) {
   return await sb
@@ -457,6 +463,5 @@ export async function updateNote(noteId, newText, userId) {
 }
 
 export async function deleteNote(noteId) {
-  // RLS: creator or admin
   return await sb.from(NOTES_TABLE).delete().eq("id", noteId);
 }
