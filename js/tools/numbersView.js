@@ -1,5 +1,5 @@
 import { sb, getSession } from "../lib/supabaseClient.js";
-import { esc, includesCI, copyToClipboard } from "../lib/utils.js";
+import { esc, includesCI } from "../lib/utils.js";
 import { signIn, signUp, signOut, isAdminUser } from "../lib/auth.js";
 
 const TABLE = "bank_numbers";
@@ -51,27 +51,28 @@ export async function renderNumbersView(viewRoot) {
             </div>
             <div class="cardBody">
               <div class="grid4">
+                <input id="f_bank_country" type="text" placeholder="Bank country">
                 <input id="f_bankname" type="text" placeholder="Bankname">
                 <input id="f_bankwebsite" type="text" placeholder="Bank website">
                 <input id="f_location_name" type="text" placeholder="Location">
-                <input id="f_phone_number" type="text" placeholder="Phone">
               </div>
               <div class="grid4">
+                <input id="f_phone_number" type="text" placeholder="Phone">
                 <input id="f_cardtype" type="text" placeholder="Card type">
                 <input id="f_service_provider_name" type="text" placeholder="Service provider">
                 <input id="f_ica_number" type="text" placeholder="ICA">
-                <input id="f_fax_number" type="text" placeholder="Fax">
               </div>
               <div class="grid4">
+                <input id="f_fax_number" type="text" placeholder="Fax">
                 <input id="f_insurance_name" type="text" placeholder="Insurance name">
                 <input id="f_insurance_number" type="text" placeholder="Insurance number">
                 <input id="f_bic_number" type="text" placeholder="BIC">
-                <input id="f_blz_number" type="text" placeholder="BLZ">
               </div>
-              <div class="grid2">
+              <div class="grid3">
+                <input id="f_blz_number" type="text" placeholder="BLZ">
                 <input id="f_bin_number" type="text" placeholder="BIN">
                 <span style="color:rgba(255,255,255,.55); font-size:12px; align-self:center;">
-                  Tip: Click “Copy phone” in the table.
+                  Tip: Use filters to quickly narrow down results.
                 </span>
               </div>
             </div>
@@ -86,6 +87,7 @@ export async function renderNumbersView(viewRoot) {
               <table class="table">
                 <thead>
                   <tr>
+                    <th>Bank Country</th>
                     <th>Bankname</th>
                     <th>Bank website</th>
                     <th>Location</th>
@@ -100,7 +102,6 @@ export async function renderNumbersView(viewRoot) {
                     <th>BIC</th>
                     <th>BLZ</th>
                     <th>BIN</th>
-                    <th style="width:140px;">Copy</th>
                   </tr>
                 </thead>
                 <tbody id="rows"></tbody>
@@ -148,6 +149,15 @@ export async function renderNumbersView(viewRoot) {
     });
   }
 
+  let allRows = [];
+
+  async function loadAndRender() {
+    const res = await sb.from(TABLE).select("*").order("bankname", { ascending: true });
+    if (res.error) { alert(res.error.message); return; }
+    allRows = res.data || [];
+    renderTable();
+  }
+
   if (refreshBtn) refreshBtn.addEventListener("click", async () => loadAndRender());
 
   const session2 = await getSession();
@@ -164,14 +174,18 @@ export async function renderNumbersView(viewRoot) {
   const FLT = {
     globalSearch: document.getElementById("globalSearch"),
     f_isems_number: document.getElementById("f_isems_number"),
+
+    f_bank_country: document.getElementById("f_bank_country"),
     f_bankname: document.getElementById("f_bankname"),
     f_bankwebsite: document.getElementById("f_bankwebsite"),
     f_location_name: document.getElementById("f_location_name"),
     f_phone_number: document.getElementById("f_phone_number"),
+
     f_cardtype: document.getElementById("f_cardtype"),
     f_service_provider_name: document.getElementById("f_service_provider_name"),
     f_ica_number: document.getElementById("f_ica_number"),
     f_fax_number: document.getElementById("f_fax_number"),
+
     f_insurance_name: document.getElementById("f_insurance_name"),
     f_insurance_number: document.getElementById("f_insurance_number"),
     f_bic_number: document.getElementById("f_bic_number"),
@@ -180,8 +194,6 @@ export async function renderNumbersView(viewRoot) {
   };
 
   const clearBtn = document.getElementById("clearBtn");
-
-  let allRows = [];
 
   Object.values(FLT).forEach(el => {
     el.addEventListener("input", renderTable);
@@ -198,6 +210,7 @@ export async function renderNumbersView(viewRoot) {
 
   function haystack(r) {
     return [
+      r.bank_country,
       r.bankname, r.bankwebsite, r.location_name,
       r.isems_number ? "ems" : "non-ems",
       r.phone_number, r.cardtype, r.service_provider_name,
@@ -211,14 +224,18 @@ export async function renderNumbersView(viewRoot) {
     const qGlobal = (FLT.globalSearch.value || "").trim().toLowerCase();
     const qEms = (FLT.f_isems_number.value || "").trim();
 
+    if (!includesCI(r.bank_country, (FLT.f_bank_country.value || "").trim().toLowerCase())) return false;
+
     if (!includesCI(r.bankname, (FLT.f_bankname.value || "").trim().toLowerCase())) return false;
     if (!includesCI(r.bankwebsite, (FLT.f_bankwebsite.value || "").trim().toLowerCase())) return false;
     if (!includesCI(r.location_name, (FLT.f_location_name.value || "").trim().toLowerCase())) return false;
     if (!includesCI(r.phone_number, (FLT.f_phone_number.value || "").trim().toLowerCase())) return false;
+
     if (!includesCI(r.cardtype, (FLT.f_cardtype.value || "").trim().toLowerCase())) return false;
     if (!includesCI(r.service_provider_name, (FLT.f_service_provider_name.value || "").trim().toLowerCase())) return false;
     if (!includesCI(r.ica_number, (FLT.f_ica_number.value || "").trim().toLowerCase())) return false;
     if (!includesCI(r.fax_number, (FLT.f_fax_number.value || "").trim().toLowerCase())) return false;
+
     if (!includesCI(r.insurance_name, (FLT.f_insurance_name.value || "").trim().toLowerCase())) return false;
     if (!includesCI(r.insurance_number, (FLT.f_insurance_number.value || "").trim().toLowerCase())) return false;
     if (!includesCI(r.bic_number, (FLT.f_bic_number.value || "").trim().toLowerCase())) return false;
@@ -240,6 +257,7 @@ export async function renderNumbersView(viewRoot) {
 
     elRows.innerHTML = list.map(r => `
       <tr>
+        <td>${esc(r.bank_country || "")}</td>
         <td>${esc(r.bankname)}</td>
         <td>${r.bankwebsite ? `<a href="${esc(r.bankwebsite)}" target="_blank" rel="noopener noreferrer">${esc(r.bankwebsite)}</a>` : ""}</td>
         <td>${esc(r.location_name || "")}</td>
@@ -254,24 +272,8 @@ export async function renderNumbersView(viewRoot) {
         <td>${esc(r.bic_number || "")}</td>
         <td>${esc(r.blz_number || "")}</td>
         <td>${esc(r.bin_number || "")}</td>
-        <td>
-          <button class="btn" data-copy="${esc(r.phone_number)}">Copy phone</button>
-        </td>
       </tr>
     `).join("");
-
-    elRows.querySelectorAll("[data-copy]").forEach(btn => {
-      btn.addEventListener("click", async () => {
-        await copyToClipboard(btn.getAttribute("data-copy"));
-      });
-    });
-  }
-
-  async function loadAndRender() {
-    const res = await sb.from(TABLE).select("*").order("bankname", { ascending: true });
-    if (res.error) { alert(res.error.message); return; }
-    allRows = res.data || [];
-    renderTable();
   }
 
   await loadAndRender();
