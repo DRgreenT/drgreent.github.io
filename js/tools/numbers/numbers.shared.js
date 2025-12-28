@@ -429,3 +429,72 @@ export async function updateNote(noteId, newText, userId) {
 export async function deleteNote(noteId) {
   return await sb.from(NOTES_TABLE).delete().eq("id", noteId);
 }
+
+// ---------------------------
+// Filters UI + wiring (compat for numbersView.js)
+// ---------------------------
+
+export function buildFiltersUI({ showAdminLink = false }) {
+  const filterInputs = COLUMNS
+    .filter(c => c.filter && c.type !== "bool")
+    .map(c => `<input data-filter="${esc(c.key)}" type="text" placeholder="${esc(c.label)}">`)
+    .join("");
+
+  return `
+    <div class="card" style="border-radius:14px;">
+      <div class="cardHead">
+        <strong>Filters</strong>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <input id="globalSearch" type="text" placeholder="Global search (all fields)" style="width:320px; max-width:70vw;">
+          <select id="f_isems_number" style="width:160px;">
+            <option value="">EMS: Any</option>
+            <option value="true">EMS</option>
+            <option value="false">Non-EMS</option>
+          </select>
+          <button class="btn" id="clearBtn" type="button">Clear</button>
+          <a class="btn" id="adminLink" href="./admin.html" style="display:${showAdminLink ? "inline-flex" : "none"};">Admin Editor</a>
+        </div>
+      </div>
+
+      <div class="cardBody">
+        <div class="grid4">
+          ${filterInputs}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+export function getFilters(root) {
+  const fieldMap = {};
+  COLUMNS.forEach(c => {
+    if (c.filter && c.type !== "bool") {
+      fieldMap[c.key] = root.querySelector(`[data-filter="${CSS.escape(c.key)}"]`);
+    }
+  });
+
+  return {
+    globalSearch: root.querySelector("#globalSearch"),
+    isems: root.querySelector("#f_isems_number"),
+    clearBtn: root.querySelector("#clearBtn"),
+    fields: fieldMap,
+  };
+}
+
+// ✅ This is what your error complains about:
+export function wireFilters({ FLT, onChange }) {
+  // inputs
+  Object.values(FLT.fields || {}).forEach(el => el?.addEventListener("input", onChange));
+  // global search
+  FLT.globalSearch?.addEventListener("input", onChange);
+  // EMS select
+  FLT.isems?.addEventListener("change", onChange);
+
+  // clear button
+  FLT.clearBtn?.addEventListener("click", () => {
+    if (FLT.globalSearch) FLT.globalSearch.value = "";
+    if (FLT.isems) FLT.isems.value = "";
+    Object.values(FLT.fields || {}).forEach(el => { if (el) el.value = ""; });
+    onChange();
+  });
+}
