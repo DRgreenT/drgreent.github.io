@@ -11,12 +11,12 @@ body{
   margin:0; font-family:var(--sans); color:var(--text);
   background: 
     radial-gradient(
-      200px 200px at 80% 50%,
+      200px 200px at 80% 10%,
       hsla(38, 100%, 55%, 0.8) 0%,
       transparent 75%
     ),
     radial-gradient(
-      200px 200px at 60% 50%,
+      200px 200px at 75% 10%,
       hsla(8, 100%, 55%, 0.8) 0%,
       transparent 75%
     ),
