@@ -262,7 +262,7 @@ const DEFAULT_KEYS = [
   "ica_number",
   "bankwebsite",
   "cardtype",
-  "ems_number",
+  "ems_status",
   "service_provider_name",
   "phone_number",
   "info",
@@ -314,8 +314,8 @@ function renderCompactRows(list, notesByBankId) {
       ? `<a href="${esc(website)}" target="_blank" rel="noopener">Link</a>`
       : "";
 
-    // EMS is a varchar now (ems_number). We display the stored value as-is.
-    const emsCell = esc(r.ems_number || "");
+    // EMS status is restricted to: Both / Yes / No.
+    const emsCell = esc(r.ems_status || "");
 
     const mainRow = `
       <tr>

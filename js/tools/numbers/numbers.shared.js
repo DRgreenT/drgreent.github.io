@@ -103,7 +103,7 @@ export function renderAccessDenied() {
 
 export function haystack(row) {
   // Concatenate all column values for the global search.
-  // (EMS is no longer boolean; everything is treated as text.)
+  // (Everything is treated as text.)
   return COLUMNS
     .map(c => (row[c.key] ?? "").toString())
     .join(" | ")
@@ -146,6 +146,15 @@ function gridClassForCount(n) {
 function formControlHTML(c) {
   const star = c.required ? " *" : "";
   const ph = `${c.label}${star}${c.type === "url" ? " (https://...)" : ""}`;
+
+  // Support enum/select fields (e.g. ems_status)
+  if (c.type === "enum" && Array.isArray(c.options)) {
+    const opts = [`<option value="">${esc(ph)}</option>`]
+      .concat(c.options.map(o => `<option value="${esc(o)}">${esc(o)}</option>`))
+      .join("");
+    return `<select id="${esc(c.key)}">${opts}</select>`;
+  }
+
   return `<input id="${esc(c.key)}" type="text" placeholder="${esc(ph)}">`;
 }
 
@@ -218,16 +227,103 @@ export function payloadFromForm(refs) {
   return payload;
 }
 
+/**
+ * Validates client-side like your SQL CHECK constraints.
+ * Also normalizes a few obvious fields so the DB check passes:
+ * - bank_country: uppercase
+ * - bic_number: uppercase
+ * - ems_status: accepts both/yes/no and converts to Both/Yes/No
+ *
+ * Returns: string error message or null
+ */
 export function validatePayload(payload, { isValidUrlMaybe }) {
+  // --- Normalization (minimal + predictable)
+  if (payload.bank_country) payload.bank_country = String(payload.bank_country).trim().toUpperCase();
+  if (payload.bic_number) payload.bic_number = String(payload.bic_number).trim().toUpperCase();
+
+  // ems_status: allow user input "both/yes/no" and normalize to DB values
+  if (payload.ems_status) {
+    const raw = String(payload.ems_status).trim();
+    const lower = raw.toLowerCase();
+    if (lower === "both") payload.ems_status = "Both";
+    else if (lower === "yes") payload.ems_status = "Yes";
+    else if (lower === "no") payload.ems_status = "No";
+    else payload.ems_status = raw; // let validation below catch it
+  }
+
+  // required fields
   for (const c of COLUMNS) {
     if (!c.required) continue;
     const v = payload[c.key];
     if (!v) return `${c.label} is required.`;
   }
 
+  // URL check (schema: bankwebsite varchar(255), optional)
   if (payload.bankwebsite && !isValidUrlMaybe(payload.bankwebsite)) {
     return "Bank website must be a valid URL (https://...)";
   }
+
+  // --- DB constraint mirrors (client-side)
+  // bank_country varchar(2) check (bank_country ~ '^[A-Z]{2}$')
+  if (payload.bank_country && !/^[A-Z]{2}$/.test(payload.bank_country)) {
+    return "Bank Country must be exactly 2 uppercase letters (e.g. DE, GR, US).";
+  }
+
+  // ems_status varchar(4) check (ems_status in ('Both','Yes','No'))
+  if (payload.ems_status && !/^(Both|Yes|No)$/.test(payload.ems_status)) {
+    return "EMS must be one of: Both, Yes, No.";
+  }
+
+  // phone_number varchar(25) check (phone_number ~ '^[0-9+ ]+$')
+  if (payload.phone_number && !/^[0-9+ ]+$/.test(payload.phone_number)) {
+    return "Phone number may only contain digits, spaces, and '+' (e.g. +49 30 123456).";
+  }
+
+  // fax_number varchar(25) check (fax_number is null or fax_number ~ '^[0-9+ ]+$')
+  if (payload.fax_number && !/^[0-9+ ]+$/.test(payload.fax_number)) {
+    return "Fax number may only contain digits, spaces, and '+'.";
+  }
+
+  // ica_number varchar(11) check (ica_number is null or ica_number ~ '^[0-9]+$')
+  if (payload.ica_number && !/^[0-9]+$/.test(payload.ica_number)) {
+    return "ICA must contain digits only.";
+  }
+
+  // insurance_number varchar(30) check (insurance_number is null or insurance_number ~ '^[0-9]+$')
+  if (payload.insurance_number && !/^[0-9]+$/.test(payload.insurance_number)) {
+    return "Insurance number must contain digits only.";
+  }
+
+  // bic_number varchar(11) check (bic_number is null or bic_number ~ '^[A-Z0-9]{8}([A-Z0-9]{3})?$')
+  if (payload.bic_number && !/^[A-Z0-9]{8}([A-Z0-9]{3})?$/.test(payload.bic_number)) {
+    return "BIC must be 8 or 11 characters (A-Z/0-9), e.g. DEUTDEFF or DEUTDEFF500.";
+  }
+
+  // blz_number varchar(8) check (blz_number is null or blz_number ~ '^[0-9]{8}$')
+  if (payload.blz_number && !/^[0-9]{8}$/.test(payload.blz_number)) {
+    return "BLZ must be exactly 8 digits.";
+  }
+
+  // bin_number varchar(6) check (bin_number is null or bin_number ~ '^[0-9]{6}$')
+  if (payload.bin_number && !/^[0-9]{6}$/.test(payload.bin_number)) {
+    return "BIN must be exactly 6 digits.";
+  }
+
+  // --- Length mirrors (helpful messages; DB will also enforce)
+  if (payload.bankname && String(payload.bankname).length > 150) return "Bankname is too long (max 150).";
+  if (payload.bankwebsite && String(payload.bankwebsite).length > 255) return "Bank website is too long (max 255).";
+  if (payload.location_name && String(payload.location_name).length > 150) return "Location is too long (max 150).";
+  if (payload.phone_number && String(payload.phone_number).length > 25) return "Phone number is too long (max 25).";
+  if (payload.cardtype && String(payload.cardtype).length > 50) return "Card type is too long (max 50).";
+  if (payload.uad_search_name && String(payload.uad_search_name).length > 150) return "UAD search name is too long (max 150).";
+  if (payload.service_provider_name && String(payload.service_provider_name).length > 150) return "Service provider name is too long (max 150).";
+  if (payload.ica_number && String(payload.ica_number).length > 11) return "ICA is too long (max 11).";
+  if (payload.fax_number && String(payload.fax_number).length > 25) return "Fax number is too long (max 25).";
+  if (payload.insurance_name && String(payload.insurance_name).length > 150) return "Insurance name is too long (max 150).";
+  if (payload.insurance_number && String(payload.insurance_number).length > 30) return "Insurance number is too long (max 30).";
+  if (payload.bic_number && String(payload.bic_number).length > 11) return "BIC is too long (max 11).";
+  if (payload.blz_number && String(payload.blz_number).length > 8) return "BLZ is too long (max 8).";
+  if (payload.bin_number && String(payload.bin_number).length > 6) return "BIN is too long (max 6).";
 
   return null;
 }
@@ -395,10 +491,18 @@ export async function deleteNote(noteId) {
 // ---------------------------
 
 export function buildFiltersUI({ showAdminLink = false }) {
-  // All filters are text inputs now (EMS is no longer boolean).
+  // Filters are mostly text inputs; ems_status is a select (Both/Yes/No).
   const filterInputs = COLUMNS
     .filter(c => c.filter)
-    .map(c => `<input data-filter="${esc(c.key)}" type="text" placeholder="${esc(c.label)}">`)
+    .map(c => {
+      if (c.key === "ems_status" && Array.isArray(c.options)) {
+        const opts = [`<option value="">${esc(c.label)} (Any)</option>`]
+          .concat(c.options.map(o => `<option value="${esc(o)}">${esc(o)}</option>`))
+          .join("");
+        return `<select data-filter="${esc(c.key)}">${opts}</select>`;
+      }
+      return `<input data-filter="${esc(c.key)}" type="text" placeholder="${esc(c.label)}">`;
+    })
     .join("");
 
   return `
@@ -438,7 +542,11 @@ export function getFilters(root) {
 
 export function wireFilters({ FLT, onChange }) {
   // inputs
-  Object.values(FLT.fields || {}).forEach(el => el?.addEventListener("input", onChange));
+  Object.values(FLT.fields || {}).forEach(el => {
+    if (!el) return;
+    const evt = el.tagName === "SELECT" ? "change" : "input";
+    el.addEventListener(evt, onChange);
+  });
   // global search
   FLT.globalSearch?.addEventListener("input", onChange);
 

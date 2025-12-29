@@ -10,14 +10,14 @@ export const NOTES_TABLE = "bank_number_notes";
  * - admin form inputs + payload mapping
  */
 export const COLUMNS = [
+  // ISO country code (2 letters, uppercase)
   { key: "bank_country", label: "Bank Country", type: "text", filter: true, form: true, required: true, group: 1 },
   { key: "bankname", label: "Bankname", type: "text", filter: true, form: true, required: true, group: 1 },
   { key: "bankwebsite", label: "Bank website", type: "url", filter: true, form: true, group: 1 },
   { key: "location_name", label: "Location", type: "text", filter: true, form: true, group: 1 },
 
-  // EMS is no longer a boolean. The DB column is ems_number (varchar NOT NULL).
-  // Keep it as plain text for filters + admin edit.
-  { key: "ems_number", label: "EMS", type: "text", filter: true, form: true, required: true, group: 2 },
+  // EMS status (DB constraint: 'Both' | 'Yes' | 'No')
+  { key: "ems_status", label: "EMS", type: "enum", options: ["Both", "Yes", "No"], filter: true, form: true, required: true, group: 2 },
   { key: "phone_number", label: "Phone", type: "text", filter: true, form: true, required: true, mono: true, group: 2 },
   { key: "fax_number", label: "Fax", type: "text", filter: true, form: true, group: 2 },
 

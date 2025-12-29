@@ -97,8 +97,8 @@ export async function renderNumbersAdmin(adminRoot) {
     saveMsg.textContent = "";
 
     // Schema-driven payload:
-    // - EMS is now a varchar column: ems_number (handled as normal text by schema)
-    // - uad_search_name is editable in admin via schema (form: true)
+    // - EMS is an enum-like varchar column: ems_status ('Both' | 'Yes' | 'No')
+    // - validation is handled in validatePayload (mirrors DB CHECK constraints)
     const payload = payloadFromForm(refs);
 
     // keep client fields (safe even with trigger)
