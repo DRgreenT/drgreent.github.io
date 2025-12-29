@@ -26,7 +26,7 @@ export async function renderNumbersAdmin(adminRoot) {
   const session = await getSession();
 
   adminRoot.innerHTML = renderShell({
-    title: "Admin Editor",
+    title: "Bank Info Editor",
     subtitle: "Admins only.",
     session,
   });
@@ -357,7 +357,7 @@ export async function renderNumbersAdmin(adminRoot) {
   hasNotesEl.addEventListener("change", render);
   refreshBtn?.addEventListener("click", load);
 
-  // initial
+  // init
   clearForm(refs);
   setNotesVisible(false);
   await load();

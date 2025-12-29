@@ -196,7 +196,7 @@ export async function renderNumbersView(viewRoot) {
     const modal = bodyRoot.querySelector("#notesModal");
 
     // Re-fetch notes and find the note by id.
-    // This avoids having to embed the full note text into the DOM.
+
     (async () => {
       const { data: notes } = await loadNotesForBankId(activeBankId);
       const n = (notes || []).find(x => String(x.id) === String(noteId));
@@ -382,8 +382,8 @@ function formatCellValue(col, raw) {
 }
 
 /**
- * CSS.escape polyfill (enough for our ids)
- * We use it for querySelector attributes.
+ * CSS.escape 
+ * querySelector attributes
  */
 function cssEscape(v) {
   return String(v).replace(/["\\]/g, "\\$&");

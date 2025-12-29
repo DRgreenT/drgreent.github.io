@@ -5,7 +5,7 @@ export const SUPABASE_ANON_KEY = "sb_publishable_XAiOftT-_u-pgSWguvYE3Q_WPbmaWyP
 
 export const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// 👇 DEBUG ONLY (kannst du später wieder entfernen)
+//  DEBUG ONLY (delete later)
 window.sb = sb;
 
 export async function getSession() {

@@ -383,7 +383,6 @@ export function groupNotesByBankId(notes) {
   return m;
 }
 
-// ✅ THIS EXPORT was missing in the broken refactor — needed by numbersView.js
 export async function loadNotesForBankIds(bankIds) {
   if (!bankIds?.length) return { data: [], error: null };
 
@@ -452,7 +451,7 @@ export function buildFiltersUI({ showAdminLink = false }) {
             <option value="false">Non-EMS</option>
           </select>
           <button class="btn" id="clearBtn" type="button">Clear</button>
-          <a class="btn" id="adminLink" href="./admin.html" style="display:${showAdminLink ? "inline-flex" : "none"};">Admin Editor</a>
+          <a class="btn" id="adminLink" href="./admin.html" style="display:${showAdminLink ? "inline-flex" : "none"};">Bank Info Editor</a>
         </div>
       </div>
 
@@ -481,7 +480,6 @@ export function getFilters(root) {
   };
 }
 
-// ✅ This is what your error complains about:
 export function wireFilters({ FLT, onChange }) {
   // inputs
   Object.values(FLT.fields || {}).forEach(el => el?.addEventListener("input", onChange));
@@ -500,18 +498,13 @@ export function wireFilters({ FLT, onChange }) {
 }
 
 // ------------------------------------------------------------------
-// Backwards-compat exports for older numbersView.js / numbersAdmin.js
+// Backwards-compat exports 
 // ------------------------------------------------------------------
 
-// Old name -> new function
-export function buildTableUI(opts = {}) {
-  // old signature: { actions?: boolean, extraHeaderHtml?: string }
-  // our new signature: buildNumbersTable({ actions, showNotesCol, adminHeaderControlsHtml })
-  const { actions = false, extraHeaderHtml = "", adminHeaderControlsHtml = "" } = opts;
 
-  // If old code used extraHeaderHtml, we emulate by using showNotesCol + manual injection.
-  // We keep it simple: if extraHeaderHtml is non-empty, append it by treating it as "notes column header".
-  // (Your view/admin code can still render the matching extra TDs if it used extraCellHtml.)
+export function buildTableUI(opts = {}) {
+
+  const { actions = false, extraHeaderHtml = "", adminHeaderControlsHtml = "" } = opts;
   const showNotesCol = !!extraHeaderHtml;
 
   return buildNumbersTable({
@@ -521,12 +514,10 @@ export function buildTableUI(opts = {}) {
   });
 }
 
-// Old name -> new renderer
-export function renderRows(root, list, opts = {}) {
-  // old signature: { actions?, onEdit?, onDelete?, extraCellHtml? }
-  const { actions = false, onEdit, onDelete, extraCellHtml } = opts;
 
-  // If old code provided extraCellHtml, we treat it as "notes column" cell builder.
+export function renderRows(root, list, opts = {}) {
+
+  const { actions = false, onEdit, onDelete, extraCellHtml } = opts;
   const showNotesCol = typeof extraCellHtml === "function";
 
   return renderNumbersRows(root, list, {
