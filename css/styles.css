@@ -9,9 +9,18 @@
 *{box-sizing:border-box}
 body{
   margin:0; font-family:var(--sans); color:var(--text);
-  background: radial-gradient(700px 700px at 60% 50%, #F7A500 0%, transparent 75%),
-              radial-gradient(700px 700px at 40% 50%, #F72000, transparent 75%),
-              var(--bg);
+  background: 
+    radial-gradient(
+      700px 700px at 60% 50%,
+      hsla(38, 70%, 55%, 0.8) 0%,
+      transparent 75%
+    ),
+    radial-gradient(
+      700px 700px at 40% 50%,
+      hsla(8, 70%, 55%, 0.8) 0%,
+      transparent 75%
+    ),
+    var(--bg);
   min-height:100vh;
 }
 
