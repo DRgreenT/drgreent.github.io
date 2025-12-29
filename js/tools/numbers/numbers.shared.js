@@ -115,25 +115,20 @@ export function renderAccessDenied() {
 // ---------------------------
 
 export function haystack(row) {
-  return COLUMNS.map(c => {
-    const v = row[c.key];
-    if (c.type === "bool") return v ? "ems" : "non-ems";
-    return (v ?? "").toString();
-  }).join(" | ").toLowerCase();
+  // Concatenate all column values for the global search.
+  // (EMS is no longer boolean; everything is treated as text.)
+  return COLUMNS
+    .map(c => (row[c.key] ?? "").toString())
+    .join(" | ")
+    .toLowerCase();
 }
 
 export function passesFilters(row, FLT) {
   const qGlobal = (FLT.globalSearch?.value || "").trim().toLowerCase();
-  const qEms = (FLT.isems?.value || "").trim();
 
   for (const [key, el] of Object.entries(FLT.fields || {})) {
     const q = (el?.value || "").trim().toLowerCase();
     if (!includesCI(row[key], q)) return false;
-  }
-
-  if (qEms !== "") {
-    const want = qEms === "true";
-    if (!!row.isems_number !== want) return false;
   }
 
   if (qGlobal && !haystack(row).includes(qGlobal)) return false;
@@ -162,15 +157,6 @@ function gridClassForCount(n) {
 }
 
 function formControlHTML(c) {
-  if (c.type === "bool") {
-    return `
-      <select id="${esc(c.key)}">
-        <option value="false">Non-EMS</option>
-        <option value="true">EMS</option>
-      </select>
-    `;
-  }
-
   const star = c.required ? " *" : "";
   const ph = `${c.label}${star}${c.type === "url" ? " (https://...)" : ""}`;
   return `<input id="${esc(c.key)}" type="text" placeholder="${esc(ph)}">`;
@@ -217,9 +203,7 @@ export function clearForm(refs) {
     if (!c.form) continue;
     const el = refs[c.key];
     if (!el) continue;
-
-    if (c.type === "bool" && el.tagName === "SELECT") el.value = "false";
-    else el.value = "";
+    el.value = "";
   }
   refs.bankname?.focus?.();
 }
@@ -229,9 +213,7 @@ export function fillForm(refs, item) {
     if (!c.form) continue;
     const el = refs[c.key];
     if (!el) continue;
-
-    if (c.type === "bool") el.value = item[c.key] ? "true" : "false";
-    else el.value = item[c.key] ?? "";
+    el.value = item[c.key] ?? "";
   }
   refs.bankname?.focus?.();
 }
@@ -242,11 +224,6 @@ export function payloadFromForm(refs) {
     if (!c.form) continue;
     const el = refs[c.key];
     if (!el) continue;
-
-    if (c.type === "bool") {
-      payload[c.key] = el.value === "true";
-      continue;
-    }
 
     const v = (el.value ?? "").toString().trim();
     payload[c.key] = v ? v : null;
@@ -306,9 +283,6 @@ export function renderNumbersRows(root, list, { actions = false, showNotesCol = 
 
       if (c.type === "url") {
         return `<td>${v ? `<a href="${esc(v)}" target="_blank" rel="noopener noreferrer">${esc(v)}</a>` : ""}</td>`;
-      }
-      if (c.type === "bool") {
-        return `<td>${v ? "EMS" : "Non-EMS"}</td>`;
       }
 
       const cls = c.mono ? ` class="mono"` : "";
@@ -434,8 +408,9 @@ export async function deleteNote(noteId) {
 // ---------------------------
 
 export function buildFiltersUI({ showAdminLink = false }) {
+  // All filters are text inputs now (EMS is no longer boolean).
   const filterInputs = COLUMNS
-    .filter(c => c.filter && c.type !== "bool")
+    .filter(c => c.filter)
     .map(c => `<input data-filter="${esc(c.key)}" type="text" placeholder="${esc(c.label)}">`)
     .join("");
 
@@ -445,11 +420,6 @@ export function buildFiltersUI({ showAdminLink = false }) {
         <strong>Filters</strong>
         <div style="display:flex; gap:10px; flex-wrap:wrap;">
           <input id="globalSearch" type="text" placeholder="Global search (all fields)" style="width:320px; max-width:70vw;">
-          <select id="f_isems_number" style="width:160px;">
-            <option value="">EMS: Any</option>
-            <option value="true">EMS</option>
-            <option value="false">Non-EMS</option>
-          </select>
           <button class="btn" id="clearBtn" type="button">Clear</button>
           <a class="btn" id="adminLink" href="./admin.html" style="display:${showAdminLink ? "inline-flex" : "none"};">Bank Info Editor</a>
         </div>
@@ -467,14 +437,13 @@ export function buildFiltersUI({ showAdminLink = false }) {
 export function getFilters(root) {
   const fieldMap = {};
   COLUMNS.forEach(c => {
-    if (c.filter && c.type !== "bool") {
+    if (c.filter) {
       fieldMap[c.key] = root.querySelector(`[data-filter="${CSS.escape(c.key)}"]`);
     }
   });
 
   return {
     globalSearch: root.querySelector("#globalSearch"),
-    isems: root.querySelector("#f_isems_number"),
     clearBtn: root.querySelector("#clearBtn"),
     fields: fieldMap,
   };
@@ -485,25 +454,20 @@ export function wireFilters({ FLT, onChange }) {
   Object.values(FLT.fields || {}).forEach(el => el?.addEventListener("input", onChange));
   // global search
   FLT.globalSearch?.addEventListener("input", onChange);
-  // EMS select
-  FLT.isems?.addEventListener("change", onChange);
 
   // clear button
   FLT.clearBtn?.addEventListener("click", () => {
     if (FLT.globalSearch) FLT.globalSearch.value = "";
-    if (FLT.isems) FLT.isems.value = "";
     Object.values(FLT.fields || {}).forEach(el => { if (el) el.value = ""; });
     onChange();
   });
 }
 
 // ------------------------------------------------------------------
-// Backwards-compat exports 
+// Backwards-compat exports
 // ------------------------------------------------------------------
 
-
 export function buildTableUI(opts = {}) {
-
   const { actions = false, extraHeaderHtml = "", adminHeaderControlsHtml = "" } = opts;
   const showNotesCol = !!extraHeaderHtml;
 
@@ -514,9 +478,7 @@ export function buildTableUI(opts = {}) {
   });
 }
 
-
 export function renderRows(root, list, opts = {}) {
-
   const { actions = false, onEdit, onDelete, extraCellHtml } = opts;
   const showNotesCol = typeof extraCellHtml === "function";
 
@@ -528,4 +490,3 @@ export function renderRows(root, list, opts = {}) {
     onDelete,
   });
 }
-

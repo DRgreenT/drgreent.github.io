@@ -1,4 +1,4 @@
-// Single source 
+// Single source
 
 export const TABLE = "bank_numbers";
 export const NOTES_TABLE = "bank_number_notes";
@@ -15,7 +15,9 @@ export const COLUMNS = [
   { key: "bankwebsite", label: "Bank website", type: "url", filter: true, form: true, group: 1 },
   { key: "location_name", label: "Location", type: "text", filter: true, form: true, group: 1 },
 
-  { key: "isems_number", label: "EMS", type: "bool", filter: true, form: true, group: 2 },
+  // EMS is no longer a boolean. The DB column is ems_number (varchar NOT NULL).
+  // Keep it as plain text for filters + admin edit.
+  { key: "ems_number", label: "EMS", type: "text", filter: true, form: true, required: true, group: 2 },
   { key: "phone_number", label: "Phone", type: "text", filter: true, form: true, required: true, mono: true, group: 2 },
   { key: "fax_number", label: "Fax", type: "text", filter: true, form: true, group: 2 },
 
@@ -29,6 +31,8 @@ export const COLUMNS = [
 
   { key: "blz_number", label: "BLZ", type: "text", filter: true, form: true, group: 5 },
   { key: "bin_number", label: "BIN", type: "text", filter: true, form: true, group: 5 },
+
+  { key: "uad_search_name", label: "UAD search name", type: "text", filter: true, form: true, group: 6 },
 
   { key: "info", label: "Info", type: "text", filter: true, form: true, group: 6 },
 ];

@@ -64,7 +64,8 @@ export async function renderNumbersView(viewRoot) {
 
   // Notes counts (1 query for all visible bank ids)
   const bankIds = (allRows || []).map(r => r.id);
-  const { data: allNotes, error: notesErr } = await loadNotesForBankIds(bankIds);
+  await loadNotesForBankIds(bankIds); // keep as in template (no perf focus here)
+  const { data: allNotes } = await loadNotesForBankIds(bankIds);
   const notesByBankId = groupNotesByBankId(allNotes || []);
 
   function render(filteredRows) {
@@ -196,7 +197,6 @@ export async function renderNumbersView(viewRoot) {
     const modal = bodyRoot.querySelector("#notesModal");
 
     // Re-fetch notes and find the note by id.
-
     (async () => {
       const { data: notes } = await loadNotesForBankId(activeBankId);
       const n = (notes || []).find(x => String(x.id) === String(noteId));
@@ -262,15 +262,13 @@ const DEFAULT_KEYS = [
   "ica_number",
   "bankwebsite",
   "cardtype",
-  "isems_number",
+  "ems_number",
   "service_provider_name",
   "phone_number",
   "info",
 ];
 
 function buildCompactTableUI() {
-  // Keep the same container markup that buildNumbersTable uses (card + tableWrap),
-  // but render a compact header set required by the user.
   return `
     <div class="card" style="border-radius:14px; overflow:hidden;">
       <div class="cardHead">
@@ -286,7 +284,7 @@ function buildCompactTableUI() {
               <th>ICA</th>
               <th style="width:70px;">Link</th>
               <th>Card type</th>
-              <th style="width:70px;">EMS</th>
+              <th>EMS</th>
               <th>Service provider</th>
               <th>Phone</th>
               <th>Info</th>
@@ -316,9 +314,9 @@ function renderCompactRows(list, notesByBankId) {
       ? `<a href="${esc(website)}" target="_blank" rel="noopener">Link</a>`
       : "";
 
-    const emsCell = r.isems_number ? "Yes" : "No";
+    // EMS is a varchar now (ems_number). We display the stored value as-is.
+    const emsCell = esc(r.ems_number || "");
 
-    // Default row (compact columns)
     const mainRow = `
       <tr>
         <td>${esc(r.bank_country || "")}</td>
@@ -339,7 +337,6 @@ function renderCompactRows(list, notesByBankId) {
       </tr>
     `;
 
-    // Details row (collapsed by default)
     const detailsCards = extraCols
       .map(c => {
         const raw = r[c.key];
@@ -373,7 +370,6 @@ function renderCompactRows(list, notesByBankId) {
 
 function formatCellValue(col, raw) {
   if (raw === null || raw === undefined) return "";
-  if (col.type === "bool") return raw ? "Yes" : "No";
   if (col.type === "url") {
     const u = String(raw || "").trim();
     return u ? `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(u)}</a>` : "";
@@ -382,8 +378,7 @@ function formatCellValue(col, raw) {
 }
 
 /**
- * CSS.escape 
- * querySelector attributes
+ * CSS.escape polyfill (enough for our ids)
  */
 function cssEscape(v) {
   return String(v).replace(/["\\]/g, "\\$&");
