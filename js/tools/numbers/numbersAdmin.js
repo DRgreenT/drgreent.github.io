@@ -78,7 +78,6 @@ export async function renderNumbersAdmin(adminRoot) {
   const noteText = adminRoot.querySelector("#noteText");
   const noteMsg = adminRoot.querySelector("#noteMsg");
 
-  // Guard: if any of these are missing, fail loudly (avoids null errors)
   if (!saveMsg || !searchEl || !hasNotesEl || !notesBox || !notesTitle || !notesList || !noteText || !noteMsg) {
     alert("Admin UI init failed: missing expected DOM elements. Check HTML rendering.");
     return;
@@ -97,7 +96,12 @@ export async function renderNumbersAdmin(adminRoot) {
   adminRoot.querySelector("#saveBtn")?.addEventListener("click", async () => {
     saveMsg.textContent = "";
 
+    // Schema-driven payload:
+    // - EMS is now a varchar column: ems_number (handled as normal text by schema)
+    // - uad_search_name is editable in admin via schema (form: true)
     const payload = payloadFromForm(refs);
+
+    // keep client fields (safe even with trigger)
     payload.updated_by = session2.user.id;
     payload.updated_at = new Date().toISOString();
 
@@ -207,7 +211,6 @@ export async function renderNumbersAdmin(adminRoot) {
       },
     });
 
-    // Notes buttons
     adminRoot.querySelectorAll("[data-notes]").forEach(btn => {
       btn.addEventListener("click", async () => {
         const id = btn.getAttribute("data-notes");
@@ -285,7 +288,6 @@ export async function renderNumbersAdmin(adminRoot) {
         }).join("")
       : `<div style="color:rgba(255,255,255,.68); font-size:12px;">No notes yet.</div>`;
 
-    // wire edit
     notesList.querySelectorAll("[data-noteedit]").forEach(btn => {
       btn.addEventListener("click", () => {
         const id = btn.getAttribute("data-noteedit");
@@ -340,7 +342,7 @@ export async function renderNumbersAdmin(adminRoot) {
         }
         noteMsg.textContent = "Deleted.";
         await loadNotesPanel();
-        await load(); // refresh notes_count
+        await load();
       });
     });
   }
@@ -352,12 +354,10 @@ export async function renderNumbersAdmin(adminRoot) {
     render();
   }
 
-  // events
   searchEl.addEventListener("input", render);
   hasNotesEl.addEventListener("change", render);
   refreshBtn?.addEventListener("click", load);
 
-  // init
   clearForm(refs);
   setNotesVisible(false);
   await load();
@@ -400,17 +400,16 @@ function notesPanelCss() {
         color:rgba(255,255,255,.68);
         font-size:12px;
         display:flex;
-        gap:10px;
         justify-content:space-between;
         align-items:center;
+        gap:10px;
         flex-wrap:wrap;
       }
       .noteActions{
         display:flex;
         gap:10px;
-        flex-wrap:wrap;
-        justify-content:flex-end;
         align-items:center;
+        flex-wrap:wrap;
       }
     </style>
   `;

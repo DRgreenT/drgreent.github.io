@@ -10,7 +10,7 @@ export const NOTES_TABLE = "bank_number_notes";
  * - admin form inputs + payload mapping
  */
 export const COLUMNS = [
-  { key: "bank_country", label: "Bank Country", type: "text", filter: true, form: true, group: 1 },
+  { key: "bank_country", label: "Bank Country", type: "text", filter: true, form: true, required: true, group: 1 },
   { key: "bankname", label: "Bankname", type: "text", filter: true, form: true, required: true, group: 1 },
   { key: "bankwebsite", label: "Bank website", type: "url", filter: true, form: true, group: 1 },
   { key: "location_name", label: "Location", type: "text", filter: true, form: true, group: 1 },
