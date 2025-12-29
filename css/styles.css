@@ -9,8 +9,8 @@
 *{box-sizing:border-box}
 body{
   margin:0; font-family:var(--sans); color:var(--text);
-  background: radial-gradient(1000px 700px at 20% 10%, #F7A500 0%, transparent 55%),
-              radial-gradient(900px 600px at 80% 20%, #F72000, transparent 55%),
+  background: radial-gradient(1000px 700px at 60% 10%, #F7A500 0%, transparent 55%),
+              radial-gradient(900px 600px at 40% 20%, #F72000, transparent 55%),
               var(--bg);
   min-height:100vh;
 }
