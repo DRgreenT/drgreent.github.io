@@ -12,12 +12,12 @@ body{
   background: 
     radial-gradient(
       700px 700px at 60% 50%,
-      hsla(38, 70%, 55%, 0.8) 0%,
+      hsla(38, 100%, 55%, 0.6) 0%,
       transparent 75%
     ),
     radial-gradient(
       700px 700px at 40% 50%,
-      hsla(8, 70%, 55%, 0.8) 0%,
+      hsla(8, 100%, 55%, 0.6) 0%,
       transparent 75%
     ),
     var(--bg);
