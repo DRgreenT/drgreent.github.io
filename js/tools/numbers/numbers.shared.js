@@ -29,7 +29,6 @@ export function renderShell({ title, subtitle, session }) {
             <input id="password" type="password" placeholder="Password">
             <div style="display:flex; gap:10px; flex-wrap:wrap;">
               <button class="btn" id="loginBtn" type="button">Login</button>
-              <button class="btn" id="signupBtn" type="button">Sign up</button>
             </div>
             <div id="authMsg" style="color:rgba(255,255,255,.68); font-size:12px;"></div>
           </div>
@@ -44,7 +43,7 @@ export function renderShell({ title, subtitle, session }) {
 export async function wireAuth({ root, onAuthedRerender, signupHint }) {
   const authMsg = root.querySelector("#authMsg");
   const loginBtn = root.querySelector("#loginBtn");
-  const signupBtn = root.querySelector("#signupBtn");
+
   const logoutBtn = root.querySelector("#logoutBtn");
   const refreshBtn = root.querySelector("#refreshBtn");
 
@@ -56,18 +55,6 @@ export async function wireAuth({ root, onAuthedRerender, signupHint }) {
       const { error } = await signIn(email, password);
       if (error) authMsg.textContent = error.message;
       else onAuthedRerender();
-    });
-  }
-
-  if (signupBtn) {
-    signupBtn.addEventListener("click", async () => {
-      authMsg.textContent = "";
-      const email = root.querySelector("#email")?.value?.trim() || "";
-      const password = root.querySelector("#password")?.value || "";
-      const { error } = await signUp(email, password);
-      authMsg.textContent = error
-        ? error.message
-        : (signupHint || "Signed up. If email confirmation is enabled, check your inbox.");
     });
   }
 
