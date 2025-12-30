@@ -31,8 +31,8 @@ export async function renderNumbersView(viewRoot) {
   const session = await getSession();
 
   viewRoot.innerHTML = renderShell({
-    title: "Numbers",
-    subtitle: "Search & browse. Notes are available for signed-in users.",
+    title: "Banks info",
+    subtitle: "Search & browse.",
     session,
   });
 
@@ -340,7 +340,7 @@ function renderCompactRows(list, notesByBankId) {
       // Only show copy icon if phone exists
       const phoneCell = phone
         ? `
-          <span style="vertical-align: middle;">${esc(phone)}</span>
+          <span style="vertical-align: middle; font-size:small;">${esc(phone)}</span>
           <button
             type="button"
             class="btn btnRow btnRow--ghost"
@@ -496,7 +496,7 @@ function notesModalCss() {
         justify-content:center;
         align-items:flex-start;
         padding: 40px 10px;
-        background: rgba(0,0,0,.55);
+        background: rgba(0,0,0,.8);
         z-index: 50;
       }
       .noteActions{
