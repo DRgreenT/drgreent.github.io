@@ -28,6 +28,10 @@ import { COLUMNS } from "./numbers.schema.js";
  * - Notes button stays in the default column set.
  */
 export async function renderNumbersView(viewRoot) {
+  // ---------------------------------------------------------------------------
+  // Auth + shell
+  // ---------------------------------------------------------------------------
+
   const session = await getSession();
 
   viewRoot.innerHTML = renderShell({
@@ -55,19 +59,51 @@ export async function renderNumbersView(viewRoot) {
 
   const FLT = getFilters(viewRoot);
 
-  // Load full dataset once, then render on filter changes.
+  // ---------------------------------------------------------------------------
+  // Load base dataset once
+  // ---------------------------------------------------------------------------
+
   const { data: allRows, error } = await loadAllRows();
   if (error) {
     bodyRoot.querySelector("#rows").innerHTML = `<tr><td colspan="99">Error: ${esc(error.message)}</td></tr>`;
     return;
   }
 
-  // Notes counts (1 query for all visible bank ids)
-  const bankIds = (allRows || []).map((r) => r.id);
-  await loadNotesForBankIds(bankIds); // keep as in template (no perf focus here)
-  const { data: allNotes } = await loadNotesForBankIds(bankIds);
-  const notesByBankId = groupNotesByBankId(allNotes || []);
+  // ---------------------------------------------------------------------------
+  // Notes cache (used for table counts)
+  // IMPORTANT: This must be refreshable after CRUD actions.
+  // ---------------------------------------------------------------------------
 
+  let notesByBankId = new Map();
+
+  /**
+   * Refreshes the notes cache for all currently loaded rows.
+   * This is used to keep the "Notes (x)" counters in the table correct after CRUD.
+   */
+  async function refreshNotesCache() {
+    const bankIds = (allRows || []).map((r) => r.id);
+
+    // Single request (fix: removed duplicate call)
+    const { data: allNotes, error: notesErr } = await loadNotesForBankIds(bankIds);
+    if (notesErr) {
+      // Keep UI usable even if notes fail
+      notesByBankId = new Map();
+      return;
+    }
+
+    notesByBankId = groupNotesByBankId(allNotes || []);
+  }
+
+  await refreshNotesCache();
+
+  // ---------------------------------------------------------------------------
+  // Rendering
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Renders the table body for the given filtered rows and wires row actions.
+   * @param {Array<Object>} filteredRows
+   */
   function render(filteredRows) {
     // Header count
     const countEl = bodyRoot.querySelector("#count");
@@ -76,7 +112,7 @@ export async function renderNumbersView(viewRoot) {
     const rowsEl = bodyRoot.querySelector("#rows");
     rowsEl.innerHTML = renderCompactRows(filteredRows, notesByBankId);
 
-    // Notes
+    // Notes button
     rowsEl.querySelectorAll("[data-notes]").forEach((btn) => {
       btn.addEventListener("click", () => openNotes(btn.getAttribute("data-notes")));
     });
@@ -109,6 +145,9 @@ export async function renderNumbersView(viewRoot) {
     });
   }
 
+  /**
+   * Applies current filter state to the loaded dataset and triggers a re-render.
+   */
   function applyFiltersAndRender() {
     const filtered = (allRows || []).filter((r) => passesFilters(r, FLT));
     render(filtered);
@@ -120,13 +159,19 @@ export async function renderNumbersView(viewRoot) {
   // Initial render
   applyFiltersAndRender();
 
-  // ---------------------------
+  // ---------------------------------------------------------------------------
   // Expandable details row
-  // ---------------------------
+  // ---------------------------------------------------------------------------
 
+  /**
+   * Toggles the expanded details row for the given bank id.
+   * Keeps layout intact; only switches hidden attribute and button text.
+   * @param {string|number} bankId
+   */
   function toggleDetails(bankId) {
-    const detailsTr = bodyRoot.querySelector(`[data-details="${cssEscape(bankId)}"]`);
-    const btn = bodyRoot.querySelector(`[data-toggle="${cssEscape(bankId)}"]`);
+    const safeId = cssEscape(bankId);
+    const detailsTr = bodyRoot.querySelector(`[data-details="${safeId}"]`);
+    const btn = bodyRoot.querySelector(`[data-toggle="${safeId}"]`);
     if (!detailsTr || !btn) return;
 
     const isHidden = detailsTr.hasAttribute("hidden");
@@ -139,16 +184,22 @@ export async function renderNumbersView(viewRoot) {
     }
   }
 
-  // ---------------------------
+  // ---------------------------------------------------------------------------
   // Notes modal
-  // ---------------------------
+  // ---------------------------------------------------------------------------
 
   let activeBankId = null;
 
+  /**
+   * Opens the notes modal for a given bank id and loads notes for that bank.
+   * @param {string|number} bankId
+   */
   function openNotes(bankId) {
     activeBankId = bankId;
+
     const modal = bodyRoot.querySelector("#notesModal");
     modal.style.display = "flex";
+
     modal.querySelector("#noteText").value = "";
     modal.querySelector("#notesList").innerHTML = "";
     modal.querySelector("#notesTitle").textContent = `Notes`;
@@ -157,22 +208,29 @@ export async function renderNumbersView(viewRoot) {
     loadAndRenderNotes();
   }
 
+  /**
+   * Closes the notes modal and clears the active bank id.
+   */
   function closeNotes() {
     const modal = bodyRoot.querySelector("#notesModal");
     modal.style.display = "none";
     activeBankId = null;
   }
 
+  /**
+   * Loads notes for the currently active bank id and renders them into the modal.
+   * Always fetches fresh data from backend to avoid stale modal content.
+   */
   async function loadAndRenderNotes() {
     const modal = bodyRoot.querySelector("#notesModal");
     const list = modal.querySelector("#notesList");
     const title = modal.querySelector("#notesTitle");
 
     if (!activeBankId) return;
+
     const row = (allRows || []).find((r) => String(r.id) === String(activeBankId));
     title.textContent = `Notes — ${row ? esc(row.bankname || "") : ""}`;
 
-    // Fetch per-bank notes (keeps modal always fresh)
     const { data: notes, error: err } = await loadNotesForBankId(activeBankId);
     if (err) {
       list.innerHTML = `<div class="small">Error loading notes: ${esc(err.message)}</div>`;
@@ -190,12 +248,19 @@ export async function renderNumbersView(viewRoot) {
     });
   }
 
+  /**
+   * Creates the HTML for a single note card item in the modal.
+   * @param {Object} n Note record
+   * @returns {string} HTML
+   */
   function noteItemHtml(n) {
     const when = n.updated_at || n.created_at;
+    const whenTxt = when ? new Date(when).toLocaleString() : "";
+
     return `
       <div class="card" style="border-radius:12px; padding:10px; margin-bottom:10px;">
         <div class="small" style="display:flex; justify-content:space-between; gap:10px;">
-          <span>${esc(new Date(when).toLocaleString())}</span>
+          <span>${esc(whenTxt)}</span>
           <span class="mono">${esc(n.created_by || "")}</span>
         </div>
         <div style="margin-top:8px; white-space:pre-wrap;">${esc(n.note_text || "")}</div>
@@ -207,18 +272,33 @@ export async function renderNumbersView(viewRoot) {
     `;
   }
 
+  /**
+   * Creates a new note for the active bank id.
+   * After creation, refreshes modal and table counters.
+   * @param {string} noteText
+   */
   async function doCreate(noteText) {
     if (!activeBankId) return;
+
     const { error: err } = await addNote(activeBankId, noteText);
     if (err) return alert(err.message || "Failed to add note.");
+
     await loadAndRenderNotes();
-    applyFiltersAndRender(); // refresh counts in table
+
+    // Fix: counters in table must reflect changes
+    await refreshNotesCache();
+    applyFiltersAndRender();
   }
 
+  /**
+   * Starts editing an existing note by loading it and populating the textarea.
+   * @param {string|number} noteId
+   */
   function startEdit(noteId) {
     const modal = bodyRoot.querySelector("#notesModal");
+    if (!activeBankId) return;
 
-    // Re-fetch notes and find the note by id.
+    // Re-fetch notes and find the note by id (keeps editing always fresh)
     (async () => {
       const { data: notes } = await loadNotesForBankId(activeBankId);
       const n = (notes || []).find((x) => String(x.id) === String(noteId));
@@ -230,18 +310,38 @@ export async function renderNumbersView(viewRoot) {
     })();
   }
 
+  /**
+   * Updates a note by id.
+   * After update, refreshes modal and table counters.
+   * @param {string|number} noteId
+   * @param {string} noteText
+   */
   async function doUpdate(noteId, noteText) {
     const { error: err } = await updateNote(noteId, noteText);
     if (err) return alert(err.message || "Failed to update note.");
+
     await loadAndRenderNotes();
+
+    // Fix: counters in table must reflect changes
+    await refreshNotesCache();
     applyFiltersAndRender();
   }
 
+  /**
+   * Deletes a note by id (with confirm).
+   * After delete, refreshes modal and table counters.
+   * @param {string|number} noteId
+   */
   async function doDelete(noteId) {
     if (!confirm("Delete this note?")) return;
+
     const { error: err } = await deleteNote(noteId);
     if (err) return alert(err.message || "Failed to delete note.");
+
     await loadAndRenderNotes();
+
+    // Fix: counters in table must reflect changes
+    await refreshNotesCache();
     applyFiltersAndRender();
   }
 
@@ -278,6 +378,10 @@ export async function renderNumbersView(viewRoot) {
  * Compact table (non-admin)
  * ------------------------------------------------------------------ */
 
+/**
+ * Keys that are shown in the compact (default) table row.
+ * All other schema columns are shown inside the expandable details area.
+ */
 const DEFAULT_KEYS = [
   "bank_country",
   "bankname",
@@ -290,6 +394,11 @@ const DEFAULT_KEYS = [
   "info",
 ];
 
+/**
+ * Builds the compact table skeleton (header + empty tbody).
+ * Layout/styles remain unchanged.
+ * @returns {string} HTML
+ */
 function buildCompactTableUI() {
   return `
     <div class="card" style="border-radius:14px; overflow:hidden;">
@@ -321,6 +430,14 @@ function buildCompactTableUI() {
   `;
 }
 
+/**
+ * Renders all rows (main + expandable details row) as HTML.
+ * Uses notesByBankId map to display the note counters.
+ *
+ * @param {Array<Object>} list Bank rows
+ * @param {Map<any, Array<Object>>} notesByBankId Map(bankId -> notes[])
+ * @returns {string} HTML
+ */
 function renderCompactRows(list, notesByBankId) {
   const extraColsKeys = COLUMNS.map((c) => c.key).filter((k) => !DEFAULT_KEYS.includes(k));
   const extraCols = COLUMNS.filter((c) => extraColsKeys.includes(c.key));
@@ -410,6 +527,15 @@ function renderCompactRows(list, notesByBankId) {
     .join("");
 }
 
+/**
+ * Formats a raw cell value based on schema column type.
+ * - url: renders as clickable link
+ * - default: HTML-escapes and returns as plain text
+ *
+ * @param {Object} col Column schema object
+ * @param {*} raw Raw value
+ * @returns {string} HTML-safe string
+ */
 function formatCellValue(col, raw) {
   if (raw === null || raw === undefined) return "";
   if (col.type === "url") {
@@ -420,12 +546,27 @@ function formatCellValue(col, raw) {
 }
 
 /**
- * CSS.escape polyfill (enough for our ids)
+ * Escapes a value for usage inside querySelector attribute selectors.
+ * Uses native CSS.escape if available, otherwise a minimal fallback.
+ *
+ * @param {string|number} v
+ * @returns {string}
  */
 function cssEscape(v) {
-  return String(v).replace(/["\\]/g, "\\$&");
+  const s = String(v);
+  if (window.CSS?.escape) return window.CSS.escape(s);
+
+  // Fallback: escape characters that commonly break attribute selectors
+  return s.replace(/["\\\]\n\r]/g, "\\$&");
 }
 
+/**
+ * Copies given text to clipboard.
+ * Uses navigator.clipboard when available; falls back to textarea + execCommand.
+ *
+ * @param {string} text
+ * @returns {Promise<boolean>} true if copy likely succeeded
+ */
 async function copyToClipboard(text) {
   try {
     if (navigator.clipboard?.writeText) {
@@ -454,6 +595,10 @@ async function copyToClipboard(text) {
  * Notes modal markup + minimal CSS (keeps existing look)
  * ------------------------------------------------------------------ */
 
+/**
+ * Returns the notes modal HTML markup. (Hidden by default)
+ * @returns {string} HTML
+ */
 function notesModalHtml() {
   return `
     <div id="notesModal" class="modal" style="display:none;">
@@ -486,6 +631,10 @@ function notesModalHtml() {
   `;
 }
 
+/**
+ * Returns minimal CSS required for the modal (keeps existing look).
+ * @returns {string} HTML <style> block
+ */
 function notesModalCss() {
   return `
     <style>
