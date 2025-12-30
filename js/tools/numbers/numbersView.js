@@ -63,7 +63,7 @@ export async function renderNumbersView(viewRoot) {
   }
 
   // Notes counts (1 query for all visible bank ids)
-  const bankIds = (allRows || []).map(r => r.id);
+  const bankIds = (allRows || []).map((r) => r.id);
   await loadNotesForBankIds(bankIds); // keep as in template (no perf focus here)
   const { data: allNotes } = await loadNotesForBankIds(bankIds);
   const notesByBankId = groupNotesByBankId(allNotes || []);
@@ -84,6 +84,28 @@ export async function renderNumbersView(viewRoot) {
     // Row expand/collapse
     rowsEl.querySelectorAll("[data-toggle]").forEach((btn) => {
       btn.addEventListener("click", () => toggleDetails(btn.getAttribute("data-toggle")));
+    });
+
+    // Copy phone to clipboard
+    rowsEl.querySelectorAll("[data-copy-phone]").forEach((btn) => {
+      btn.addEventListener("click", async (e) => {
+        // Don't trigger row interactions / table selection
+        e.preventDefault();
+        e.stopPropagation();
+
+        const phone = btn.getAttribute("data-copy-phone") || "";
+        if (!phone) return;
+
+        const ok = await copyToClipboard(phone);
+
+        // Tiny feedback without changing layout
+        const img = btn.querySelector("img");
+        if (!img) return;
+
+        const oldOpacity = img.style.opacity;
+        img.style.opacity = ok ? "1" : "0.35";
+        setTimeout(() => (img.style.opacity = oldOpacity), 650);
+      });
     });
   }
 
@@ -147,7 +169,7 @@ export async function renderNumbersView(viewRoot) {
     const title = modal.querySelector("#notesTitle");
 
     if (!activeBankId) return;
-    const row = (allRows || []).find(r => String(r.id) === String(activeBankId));
+    const row = (allRows || []).find((r) => String(r.id) === String(activeBankId));
     title.textContent = `Notes — ${row ? esc(row.bankname || "") : ""}`;
 
     // Fetch per-bank notes (keeps modal always fresh)
@@ -157,13 +179,13 @@ export async function renderNumbersView(viewRoot) {
       return;
     }
 
-    list.innerHTML = (notes || []).map(n => noteItemHtml(n)).join("") || `<div class="small">No notes yet.</div>`;
+    list.innerHTML = (notes || []).map((n) => noteItemHtml(n)).join("") || `<div class="small">No notes yet.</div>`;
 
     // Wire edit/delete per note
-    list.querySelectorAll("[data-note-edit]").forEach(btn => {
+    list.querySelectorAll("[data-note-edit]").forEach((btn) => {
       btn.addEventListener("click", () => startEdit(btn.getAttribute("data-note-edit")));
     });
-    list.querySelectorAll("[data-note-del]").forEach(btn => {
+    list.querySelectorAll("[data-note-del]").forEach((btn) => {
       btn.addEventListener("click", () => doDelete(btn.getAttribute("data-note-del")));
     });
   }
@@ -199,7 +221,7 @@ export async function renderNumbersView(viewRoot) {
     // Re-fetch notes and find the note by id.
     (async () => {
       const { data: notes } = await loadNotesForBankId(activeBankId);
-      const n = (notes || []).find(x => String(x.id) === String(noteId));
+      const n = (notes || []).find((x) => String(x.id) === String(noteId));
       if (!n) return;
 
       modal.querySelector("#noteText").value = n.note_text || "";
@@ -300,24 +322,43 @@ function buildCompactTableUI() {
 }
 
 function renderCompactRows(list, notesByBankId) {
-  const extraColsKeys = COLUMNS
-    .map(c => c.key)
-    .filter(k => !DEFAULT_KEYS.includes(k));
+  const extraColsKeys = COLUMNS.map((c) => c.key).filter((k) => !DEFAULT_KEYS.includes(k));
+  const extraCols = COLUMNS.filter((c) => extraColsKeys.includes(c.key));
 
-  const extraCols = COLUMNS.filter(c => extraColsKeys.includes(c.key));
+  return (list || [])
+    .map((r) => {
+      const cnt = notesByBankId.get(r.id)?.length || 0;
 
-  return (list || []).map(r => {
-    const cnt = notesByBankId.get(r.id)?.length || 0;
+      const website = (r.bankwebsite || "").trim();
+      const websiteCell = website ? `<a href="${esc(website)}" target="_blank" rel="noopener">Link</a>` : "";
 
-    const website = (r.bankwebsite || "").trim();
-    const websiteCell = website
-      ? `<a href="${esc(website)}" target="_blank" rel="noopener">Link</a>`
-      : "";
+      // EMS status is restricted to: Both / Yes / No.
+      const emsCell = esc(r.ems_status || "");
 
-    // EMS status is restricted to: Both / Yes / No.
-    const emsCell = esc(r.ems_status || "");
+      const phone = (r.phone_number || "").trim();
 
-    const mainRow = `
+      // Only show copy icon if phone exists
+      const phoneCell = phone
+        ? `
+          <span>${esc(phone)}</span>
+          <button
+            type="button"
+            class="btn btnRow btnRow--ghost"
+            data-copy-phone="${esc(phone)}"
+            title="Copy phone number"
+            aria-label="Copy phone number"
+            style="margin-left:8px; padding:3px 8px; line-height:1; vertical-align:middle;"
+          >
+            <img
+              src="/src/copy.png"
+              alt="Copy"
+              style="width:14px; height:14px; vertical-align:middle; display:inline-block;"
+            />
+          </button>
+        `
+        : "";
+
+      const mainRow = `
       <tr>
         <td style="vertical-align: middle;">${esc(r.bank_country || "")}</td>
         <td style="vertical-align: middle;">${esc(r.bankname || "")}</td>
@@ -326,7 +367,7 @@ function renderCompactRows(list, notesByBankId) {
         <td style="vertical-align: middle;">${esc(r.cardtype || "")}</td>
         <td style="vertical-align: middle;">${emsCell}</td>
         <td style="vertical-align: middle;">${esc(r.service_provider_name || "")}</td>
-        <td style="vertical-align: middle;" class="mono">${esc(r.phone_number || "")}</td>
+        <td style="vertical-align: middle;" class="mono">${phoneCell}</td>
         <td style="vertical-align: middle;">${esc(r.info || "")}</td>
         <td>
           <button class="btn btnRow" type="button" data-notes="${esc(r.id)}">Notes (${cnt})</button>
@@ -337,22 +378,22 @@ function renderCompactRows(list, notesByBankId) {
       </tr>
     `;
 
-    const detailsCards = extraCols
-      .map(c => {
-        const raw = r[c.key];
-        const val = formatCellValue(c, raw);
-        if (val === "") return "";
-        return `
+      const detailsCards = extraCols
+        .map((c) => {
+          const raw = r[c.key];
+          const val = formatCellValue(c, raw);
+          if (val === "") return "";
+          return `
           <div class="kv">
             <div class="k">${esc(c.label)}</div>
             <div class="v">${val}</div>
           </div>
         `;
-      })
-      .filter(Boolean)
-      .join("");
+        })
+        .filter(Boolean)
+        .join("");
 
-    const detailsRow = `
+      const detailsRow = `
       <tr class="detailsRow" data-details="${esc(r.id)}" hidden>
         <td colspan="11">
           <div class="detailsBox">
@@ -364,8 +405,9 @@ function renderCompactRows(list, notesByBankId) {
       </tr>
     `;
 
-    return mainRow + detailsRow;
-  }).join("");
+      return mainRow + detailsRow;
+    })
+    .join("");
 }
 
 function formatCellValue(col, raw) {
@@ -382,6 +424,30 @@ function formatCellValue(col, raw) {
  */
 function cssEscape(v) {
   return String(v).replace(/["\\]/g, "\\$&");
+}
+
+async function copyToClipboard(text) {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+
+    // Fallback
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    ta.style.top = "-9999px";
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    return !!ok;
+  } catch {
+    return false;
+  }
 }
 
 /* ------------------------------------------------------------------
