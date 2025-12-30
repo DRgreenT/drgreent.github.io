@@ -340,7 +340,7 @@ function renderCompactRows(list, notesByBankId) {
       // Only show copy icon if phone exists
       const phoneCell = phone
         ? `
-          <span style="vertical-align: middle; font-size:small;">${esc(phone)}</span>
+          <span style="vertical-align: middle; font-size:medium;">${esc(phone)}</span>
           <button
             type="button"
             class="btn btnRow btnRow--ghost"
