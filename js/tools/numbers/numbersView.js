@@ -319,15 +319,15 @@ function renderCompactRows(list, notesByBankId) {
 
     const mainRow = `
       <tr>
-        <td style="vertical-align: center; text-align: left;">${esc(r.bank_country || "")}</td>
-        <td style="vertical-align: center; text-align: left;">${esc(r.bankname || "")}</td>
-        <td style="vertical-align: center; text-align: left;" class="mono">${esc(r.ica_number || "")}</td>
-        <td style="vertical-align: center; text-align: left;">${websiteCell}</td>
-        <td style="vertical-align: center; text-align: left;">${esc(r.cardtype || "")}</td>
-        <td style="vertical-align: center; text-align: left;">${emsCell}</td>
-        <td style="vertical-align: center; text-align: left;">${esc(r.service_provider_name || "")}</td>
-        <td style="vertical-align: center; text-align: left;" class="mono">${esc(r.phone_number || "")}</td>
-        <td style="vertical-align: center; text-align: left;">${esc(r.info || "")}</td>
+        <td style="vertical-align: middle;">${esc(r.bank_country || "")}</td>
+        <td style="vertical-align: middle;">${esc(r.bankname || "")}</td>
+        <td style="vertical-align: middle;" class="mono">${esc(r.ica_number || "")}</td>
+        <td style="vertical-align: middle;">${websiteCell}</td>
+        <td style="vertical-align: middle;">${esc(r.cardtype || "")}</td>
+        <td style="vertical-align: middle;">${emsCell}</td>
+        <td style="vertical-align: middle;">${esc(r.service_provider_name || "")}</td>
+        <td style="vertical-align: middle;" class="mono">${esc(r.phone_number || "")}</td>
+        <td style="vertical-align: middle;">${esc(r.info || "")}</td>
         <td>
           <button class="btn btnRow" type="button" data-notes="${esc(r.id)}">Notes (${cnt})</button>
         </td>
