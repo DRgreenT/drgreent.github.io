@@ -279,11 +279,11 @@ function buildCompactTableUI() {
         <table class="table">
           <thead>
             <tr>
-              <th>Bank Country</th>
+              <th>Country</th>
               <th>Name</th>
               <th>ICA</th>
-              <th style="width:70px;">Link</th>
-              <th>Card type</th>
+              <th style="width:70px;">Website</th>
+              <th>Cards</th>
               <th>EMS</th>
               <th>Service provider</th>
               <th>Phone</th>
@@ -319,15 +319,15 @@ function renderCompactRows(list, notesByBankId) {
 
     const mainRow = `
       <tr>
-        <td>${esc(r.bank_country || "")}</td>
-        <td>${esc(r.bankname || "")}</td>
-        <td class="mono">${esc(r.ica_number || "")}</td>
-        <td>${websiteCell}</td>
-        <td>${esc(r.cardtype || "")}</td>
-        <td>${emsCell}</td>
-        <td>${esc(r.service_provider_name || "")}</td>
-        <td class="mono">${esc(r.phone_number || "")}</td>
-        <td>${esc(r.info || "")}</td>
+        <td style="vertical-align: left; text-align: center;">${esc(r.bank_country || "")}</td>
+        <td style="vertical-align: left; text-align: center;">${esc(r.bankname || "")}</td>
+        <td style="vertical-align: left; text-align: center;" class="mono">${esc(r.ica_number || "")}</td>
+        <td style="vertical-align: left; text-align: center;">${websiteCell}</td>
+        <td style="vertical-align: left; text-align: center;">${esc(r.cardtype || "")}</td>
+        <td style="vertical-align: left; text-align: center;">${emsCell}</td>
+        <td style="vertical-align: left; text-align: center;">${esc(r.service_provider_name || "")}</td>
+        <td style="vertical-align: left; text-align: center;" class="mono">${esc(r.phone_number || "")}</td>
+        <td style="vertical-align: left; text-align: center;">${esc(r.info || "")}</td>
         <td>
           <button class="btn btnRow" type="button" data-notes="${esc(r.id)}">Notes (${cnt})</button>
         </td>
