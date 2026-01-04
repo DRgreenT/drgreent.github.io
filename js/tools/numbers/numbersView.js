@@ -416,8 +416,8 @@ function buildCompactTableUI() {
               <th style="width:70px;">Website</th>
               <th>Cards</th>
               <th>EMS</th>
-              <th>Service provider</th>
-              <th>Phone</th>
+              <th>Provider</th>
+              <th style="width:140px;>Phone</th>
               <th>Info</th>
               <th style="width:80px;">Notes</th>
               <th style="width:80px;"></th>
@@ -456,8 +456,7 @@ function renderCompactRows(list, notesByBankId) {
 
       // Only show copy icon if phone exists
       const phoneCell = phone
-        ? `
-          <span style="vertical-align: middle; font-size:small;">${esc(phone)}</span>
+        ? `          
           <button
             type="button"
             class="btn btnRow btnRow--ghost"
@@ -472,6 +471,7 @@ function renderCompactRows(list, notesByBankId) {
               style="width:14px; height:14px; vertical-align:middle; display:inline-block;"
             />
           </button>
+          <span style="vertical-align: middle; font-size:small;">${esc(phone)}</span>
         `
         : "";
 
