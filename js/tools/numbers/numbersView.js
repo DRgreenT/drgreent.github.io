@@ -417,7 +417,7 @@ function buildCompactTableUI() {
               <th>Cards</th>
               <th>EMS</th>
               <th>Provider</th>
-              <th style="width:140px;>Phone</th>
+              <th style="width:200px;>Phone</th>
               <th>Info</th>
               <th style="width:80px;">Notes</th>
               <th style="width:80px;"></th>
